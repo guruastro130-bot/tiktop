@@ -34,6 +34,9 @@ interface AdContextType {
   triggerFullScreenAdManually: () => void;
   trackAdImpression: (adId: string, videoId?: string) => Promise<void>;
   trackAdClick: (adId: string, destinationUrl: string, videoId?: string) => Promise<void>;
+  recordAdImpression: (adId: string, videoId?: string) => Promise<void>;
+  recordAdClick: (adId: string, destinationUrl?: string, videoId?: string) => Promise<void>;
+  getRandomBannerAd: () => Ad;
   fetchNextBannerAd: (avoidId?: string) => Promise<Ad | null>;
   updateSettings: (newSettings: Partial<AdSettings>) => Promise<void>;
   refreshSettings: () => Promise<void>;
@@ -45,6 +48,8 @@ export const AdProvider: React.FC<{ children: React.ReactNode }> = ({ children }
   const [adSettings, setAdSettings] = useState<AdSettings>({
     fullscreenAdInterval: 10,
     validViewThresholdSeconds: 10.0, // 10.0 seconds strictly enforced
+    bannerAdsEnabled: true,
+    fullscreenAdsEnabled: true,
     bannerRefreshSeconds: 20,
     enableAds: true,
     isTestMode: false,
@@ -437,6 +442,17 @@ export const AdProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     }
   };
 
+  const getRandomBannerAd = useCallback((): Ad => {
+    const list = INITIAL_BANNER_ADS.filter(a => a.isActive);
+    if (list.length === 0) return INITIAL_BANNER_ADS[0];
+    return list[Math.floor(Math.random() * list.length)];
+  }, []);
+
+  const recordAdImpression = trackAdImpression;
+  const recordAdClick = useCallback(async (adId: string, destinationUrl?: string, videoId?: string) => {
+    await trackAdClick(adId, destinationUrl || 'https://google.com', videoId);
+  }, [trackAdClick]);
+
   return (
     <AdContext.Provider
       value={{
@@ -458,6 +474,9 @@ export const AdProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         triggerFullScreenAdManually,
         trackAdImpression,
         trackAdClick,
+        recordAdImpression,
+        recordAdClick,
+        getRandomBannerAd,
         fetchNextBannerAd,
         updateSettings,
         refreshSettings,

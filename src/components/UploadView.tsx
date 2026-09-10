@@ -778,28 +778,6 @@ export const UploadView: React.FC<UploadViewProps> = ({
       id="creation-studio-container"
       className="h-full w-full bg-zinc-950 text-white overflow-y-auto pb-28 select-none"
     >
-      {/* Live Starting Countdown Screen */}
-      {liveCountdown !== null && (
-        <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/95 backdrop-blur-2xl animate-fade-in p-6 text-center select-none">
-          <div className="relative flex items-center justify-center mb-6">
-            <div className="absolute -inset-10 rounded-full bg-rose-500/25 blur-3xl animate-ping" />
-            <div className="flex h-36 w-36 items-center justify-center rounded-full border-4 border-rose-500 bg-rose-950/60 shadow-[0_0_50px_rgba(244,63,94,0.6)]">
-              <span
-                key={liveCountdown}
-                className="text-8xl font-black text-white animate-bounce tracking-tighter"
-              >
-                {liveCountdown}
-              </span>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 rounded-full bg-rose-600/90 px-4 py-1.5 shadow-lg border border-rose-400/40 text-sm font-black text-white">
-            <Radio className="h-4 w-4 text-white animate-pulse" />
-            <span>LIVE</span>
-          </div>
-        </div>
-      )}
-
       {studioMode === 'video' ? (
         <div className="max-w-xl mx-auto px-4 py-4">
 

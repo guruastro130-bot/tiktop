@@ -23,6 +23,8 @@ import { BlockConfirmModal } from './components/BlockConfirmModal';
 import { LiveDiscoveryView } from './components/live/LiveDiscoveryView';
 import { LiveRoomView } from './components/live/LiveRoomView';
 import { GoLiveModal } from './components/live/GoLiveModal';
+import { LiveStartCountdownPopup } from './components/live/LiveStartCountdownPopup';
+import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { TikTopApp } from './components/TikTopApp';
 
 const AppContent: React.FC = () => {
@@ -38,6 +40,7 @@ const AppContent: React.FC = () => {
   const [liveRooms, setLiveRooms] = useState<LiveRoom[]>(INITIAL_LIVE_ROOMS);
   const [activeLiveRoom, setActiveLiveRoom] = useState<LiveRoom | null>(null);
   const [isGoLiveOpen, setIsGoLiveOpen] = useState<boolean>(false);
+  const [pendingLiveRoom, setPendingLiveRoom] = useState<LiveRoom | null>(null);
 
   // Modals and Drawer States
   const [commentVideo, setCommentVideo] = useState<Video | null>(null);
@@ -256,15 +259,31 @@ const AppContent: React.FC = () => {
   };
 
   const handleSelectLiveRoom = (room: LiveRoom) => {
-    setActiveLiveRoom(room);
+    setActiveLiveRoom({ ...room, isUserHost: false });
   };
 
-  const handleStartLive = (newRoom: LiveRoom) => {
-    setLiveRooms(prev => [newRoom, ...prev]);
-    setActiveLiveRoom(newRoom);
+  // User triggers Start Live -> Pop up the 3/2/1 countdown modal first
+  const handleRequestStartLive = (newRoom: LiveRoom) => {
     setIsGoLiveOpen(false);
+    setPendingLiveRoom({ ...newRoom, isUserHost: true });
+  };
+
+  // When 3/2/1 countdown finishes and fanfare plays -> Officially start live room!
+  const handleConfirmStartLive = (newRoom: LiveRoom) => {
+    const hostedRoom: LiveRoom = { ...newRoom, isUserHost: true };
+    setLiveRooms(prev => [hostedRoom, ...prev]);
+    setActiveLiveRoom(hostedRoom);
+    setPendingLiveRoom(null);
     // Explicitly transition tab away from upload/preview so background tab is LIVE
     setCurrentTab('live');
+  };
+
+  // If user clicks cancel on the 3/2/1 countdown modal
+  const handleCancelStartLive = () => {
+    if (pendingLiveRoom?.localMediaStream) {
+      pendingLiveRoom.localMediaStream.getTracks().forEach(t => t.stop());
+    }
+    setPendingLiveRoom(null);
   };
 
   const handleDirectStartLive = (type: 'video' | 'voice') => {
@@ -311,9 +330,10 @@ const AppContent: React.FC = () => {
       isMicMuted: false,
       isCameraOff: false,
       isHostOnline: true,
+      isUserHost: true,
       createdAt: new Date().toISOString(),
     };
-    handleStartLive(newRoom);
+    handleRequestStartLive(newRoom);
   };
 
   const handleCloseLiveRoom = () => {
@@ -406,7 +426,7 @@ const AppContent: React.FC = () => {
               <UploadView
                 onUploadSuccess={handleUploadSuccess}
                 onCancel={() => setCurrentTab('home')}
-                onStartLive={handleStartLive}
+                onStartLive={handleRequestStartLive}
                 onSwitchToGoLive={() => setIsGoLiveOpen(true)}
               />
             )}
@@ -455,20 +475,30 @@ const AppContent: React.FC = () => {
 
       {/* Full-Screen Immersive Live Streaming View */}
       {activeLiveRoom && (
-        <LiveRoomView
-          key={activeLiveRoom.id}
-          room={activeLiveRoom}
-          onClose={handleCloseLiveRoom}
-          onUpdateRoom={handleUpdateLiveRoom}
-          onOpenCreatorProfile={handleOpenCreatorProfile}
-        />
+        <ErrorBoundary onReset={handleCloseLiveRoom}>
+          <LiveRoomView
+            key={activeLiveRoom.id}
+            room={activeLiveRoom}
+            onClose={handleCloseLiveRoom}
+            onUpdateRoom={handleUpdateLiveRoom}
+            onOpenCreatorProfile={handleOpenCreatorProfile}
+          />
+        </ErrorBoundary>
       )}
 
       {/* Go LIVE Modal (Voice Room 4/6/9 Seats or Video Live) */}
       <GoLiveModal
         isOpen={isGoLiveOpen}
         onClose={() => setIsGoLiveOpen(false)}
-        onStartLive={handleStartLive}
+        onStartLive={handleRequestStartLive}
+      />
+
+      {/* 3, 2, 1 Countdown Popup before Live starts */}
+      <LiveStartCountdownPopup
+        isOpen={Boolean(pendingLiveRoom)}
+        room={pendingLiveRoom}
+        onComplete={handleConfirmStartLive}
+        onCancel={handleCancelStartLive}
       />
 
       {/* Slide-Up Comments Drawer */}

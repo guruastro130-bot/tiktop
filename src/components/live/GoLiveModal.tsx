@@ -63,16 +63,14 @@ export const GoLiveModal: React.FC<GoLiveModalProps> = ({
   const [softLighting, setSoftLighting] = useState<boolean>(true);
   const [backgroundControl, setBackgroundControl] = useState<'bokeh' | 'solid' | 'natural'>('bokeh');
   const [showSetupGuide, setShowSetupGuide] = useState<boolean>(false);
-  const [countdown, setCountdown] = useState<number | null>(null);
 
   const videoPreviewRef = useRef<HTMLVideoElement>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const isStartingLiveRef = useRef<boolean>(false);
 
-  // Reset countdown & transition states whenever modal closes
+  // Reset transition states whenever modal closes
   useEffect(() => {
     if (!isOpen) {
-      setCountdown(null);
       isStartingLiveRef.current = false;
     }
   }, [isOpen]);
@@ -154,57 +152,8 @@ export const GoLiveModal: React.FC<GoLiveModalProps> = ({
       }
     }
 
-    // Begin 3, 2, 1 countdown popup with automatic start
-    isStartingLiveRef.current = true;
-    setCountdown(3);
+    finalizeStartLive();
   };
-
-  // Automatic 3, 2, 1 Countdown Handler with Tick Sounds and Auto-Launch
-  useEffect(() => {
-    if (countdown === null) return;
-
-    if (countdown === 3) {
-      try {
-        liveAudio.playCountdownTick(3);
-        if (typeof navigator !== 'undefined' && 'vibrate' in navigator) navigator.vibrate(80);
-      } catch {}
-      const timer = setTimeout(() => {
-        setCountdown(2);
-      }, 1000);
-      return () => clearTimeout(timer);
-    }
-
-    if (countdown === 2) {
-      try {
-        liveAudio.playCountdownTick(2);
-        if (typeof navigator !== 'undefined' && 'vibrate' in navigator) navigator.vibrate(80);
-      } catch {}
-      const timer = setTimeout(() => {
-        setCountdown(1);
-      }, 1000);
-      return () => clearTimeout(timer);
-    }
-
-    if (countdown === 1) {
-      try {
-        liveAudio.playCountdownTick(1);
-        if (typeof navigator !== 'undefined' && 'vibrate' in navigator) navigator.vibrate(80);
-      } catch {}
-      const timer = setTimeout(() => {
-        setCountdown(0);
-        try {
-          liveAudio.playLiveStartFanfare();
-          if (typeof navigator !== 'undefined' && 'vibrate' in navigator) navigator.vibrate([100, 50, 200]);
-        } catch {}
-        // Automatically start the live room!
-        const startTimer = setTimeout(() => {
-          finalizeStartLive();
-        }, 600);
-        return () => clearTimeout(startTimer);
-      }, 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [countdown]);
 
   const finalizeStartLive = () => {
     const hostUser = currentUser || INITIAL_USERS[0];
@@ -255,12 +204,12 @@ export const GoLiveModal: React.FC<GoLiveModalProps> = ({
       isMicMuted,
       isCameraOff: false,
       isHostOnline: true,
+      isUserHost: true,
       createdAt: new Date().toISOString(),
     };
 
     // Keep camera stream alive so LiveRoomView can immediately use it
     isStartingLiveRef.current = true;
-    setCountdown(null);
     onStartLive(newRoom);
   };
 
@@ -717,51 +666,6 @@ export const GoLiveModal: React.FC<GoLiveModalProps> = ({
             </span>
           </button>
         </div>
-
-        {/* Live Starting 3/2/1 Popup - Immediate visual feedback that Live is automatically starting */}
-        {countdown !== null && (
-          <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/95 backdrop-blur-2xl animate-fade-in p-6 text-center select-none">
-            <div className="relative flex items-center justify-center mb-6">
-              <div className="absolute -inset-12 rounded-full bg-rose-500/30 blur-3xl animate-ping" />
-              <div className="flex h-40 w-40 items-center justify-center rounded-full border-4 border-rose-500 bg-rose-950/70 shadow-[0_0_60px_rgba(244,63,94,0.8)] ring-4 ring-rose-500/30">
-                <span
-                  key={countdown}
-                  className="text-8xl font-black text-white animate-bounce tracking-tighter"
-                >
-                  {countdown === 0 ? '🔴' : countdown}
-                </span>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 rounded-full bg-rose-600 px-5 py-2 shadow-xl border border-rose-400 text-sm font-black text-white animate-pulse">
-              <Radio className="h-4 w-4 text-white animate-pulse" />
-              <span>
-                {countdown === 0
-                  ? '🔴 प्रत्यक्ष प्रसारण सुरु भयो! (LIVE NOW)'
-                  : `३... २... १... लाइभ सुरु हुँदैछ (${countdown})`}
-              </span>
-            </div>
-
-            <p className="text-xs font-semibold text-zinc-300 mt-4 max-w-xs leading-relaxed">
-              {countdown === 0
-                ? 'तपाईं प्रत्यक्ष प्रसारणमा जाँदै हुनुहुन्छ...'
-                : 'तयार हुनुहोस्! काउन्टडाउन सकिएपछि लाइभ स्वतः सुरु हुनेछ।'}
-            </p>
-
-            {countdown > 0 && (
-              <button
-                type="button"
-                onClick={() => {
-                  setCountdown(null);
-                  isStartingLiveRef.current = false;
-                }}
-                className="mt-6 rounded-full bg-zinc-800 hover:bg-zinc-700 border border-white/20 px-4 py-2 text-xs font-bold text-zinc-300 transition-colors"
-              >
-                ✕ रद्द गर्नुहोस् (Cancel)
-              </button>
-            )}
-          </div>
-        )}
 
       </div>
     </div>

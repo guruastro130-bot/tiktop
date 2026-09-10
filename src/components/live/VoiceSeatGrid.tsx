@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Mic, MicOff, Plus, Lock, Crown, MoreVertical, LogOut, Volume2, ShieldAlert, Clock, X } from 'lucide-react';
+import { Mic, MicOff, Plus, Lock, Crown, MoreVertical, LogOut, Volume2, ShieldAlert, Clock, X, Gift } from 'lucide-react';
 import { LiveSeat, VoiceSeatCount, User } from '../../types';
 
 interface VoiceSeatGridProps {
@@ -16,6 +16,7 @@ interface VoiceSeatGridProps {
   onChangeSeatLayout?: (newCount: VoiceSeatCount) => void;
   onDirectEndPartyLive?: () => void;
   liveDurationText?: string;
+  onGiftSeatUser?: (seatIndex: number, user?: any) => void;
 }
 
 export const VoiceSeatGrid: React.FC<VoiceSeatGridProps> = ({
@@ -32,12 +33,14 @@ export const VoiceSeatGrid: React.FC<VoiceSeatGridProps> = ({
   onChangeSeatLayout,
   onDirectEndPartyLive,
   liveDurationText,
+  onGiftSeatUser,
 }) => {
   const [selectedSeatIndex, setSelectedSeatIndex] = useState<number | null>(null);
 
   // Normalize seats array to match the requested seatCount (4, 6, or 9)
+  const safeSeats = Array.isArray(seats) ? seats : [];
   const normalizedSeats: LiveSeat[] = Array.from({ length: seatCount }, (_, idx) => {
-    const existing = seats.find(s => s.seatIndex === idx);
+    const existing = safeSeats.find(s => s.seatIndex === idx);
     return existing || { seatIndex: idx, isLocked: false };
   });
 
@@ -132,11 +135,10 @@ export const VoiceSeatGrid: React.FC<VoiceSeatGridProps> = ({
                 {isOccupied ? (
                   <div
                     onClick={() => {
-                      if (isCurrentUserHere || isHost) {
-                        setSelectedSeatIndex(index);
-                      }
+                      setSelectedSeatIndex(index);
                     }}
-                    className="relative cursor-pointer"
+                    className="relative cursor-pointer group"
+                    title={`${seat.user?.displayName || 'User'} - ट्याप गरी उपहार दिनुहोस् वा प्रोफाइल हेर्नुहोस्`}
                   >
                     {/* Active Voice Speaking Ripple Wave */}
                     {seat.isSpeaking && (
@@ -164,6 +166,21 @@ export const VoiceSeatGrid: React.FC<VoiceSeatGridProps> = ({
                       <div className="absolute -top-2 left-1/2 -translate-x-1/2 rounded-full bg-gradient-to-r from-amber-400 to-yellow-500 p-0.5 shadow-md">
                         <Crown className="h-3 w-3 text-black stroke-[3]" />
                       </div>
+                    )}
+
+                    {/* Quick Gift Trigger Badge for Viewer */}
+                    {!isCurrentUserHere && onGiftSeatUser && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (seat.user) onGiftSeatUser(index, seat.user);
+                        }}
+                        className="absolute -top-1 -right-1 rounded-full bg-gradient-to-r from-rose-500 to-pink-500 p-1 shadow-md text-white hover:scale-110 active:scale-95 transition-all cursor-pointer border border-white/40"
+                        title="उपहार पठाउनुहोस् (Send Gift)"
+                      >
+                        <Gift className="h-2.5 w-2.5" />
+                      </button>
                     )}
 
                     {/* Mic Status Icon Badge */}
@@ -251,6 +268,21 @@ export const VoiceSeatGrid: React.FC<VoiceSeatGridProps> = ({
                 </p>
               </div>
             </div>
+
+            {/* Quick Gift Action for ANY Seated User */}
+            {activeSeatAction.user && onGiftSeatUser && (
+              <button
+                type="button"
+                onClick={() => {
+                  onGiftSeatUser(selectedSeatIndex, activeSeatAction.user!);
+                  setSelectedSeatIndex(null);
+                }}
+                className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-rose-500 via-pink-500 to-rose-600 p-2.5 text-xs font-black text-white shadow-md hover:brightness-110 active:scale-95 transition-all cursor-pointer"
+              >
+                <Gift className="h-4 w-4" />
+                <span>🎁 {activeSeatAction.user.displayName} लाई उपहार दिनुहोस् (Send Gift)</span>
+              </button>
+            )}
 
             {/* Actions for current seated user */}
             {currentUser && activeSeatAction.user?.id === currentUser.id && (

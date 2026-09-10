@@ -172,26 +172,26 @@ export const LiveDiscoveryView: React.FC<LiveDiscoveryViewProps> = ({
               {room.type === 'voice' && (
                 <div className="absolute bottom-2.5 left-2.5 right-2.5 flex items-center justify-between">
                   <div className="flex items-center -space-x-1.5">
-                    {room.seats
+                    {(room.seats || [])
                       .filter(s => s.user)
                       .slice(0, 4)
                       .map((s, idx) => (
                         <img
                           key={idx}
-                          src={s.user?.avatarUrl}
-                          alt={s.user?.displayName}
+                          src={s.user?.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100'}
+                          alt={s.user?.displayName || 'User'}
                           className="h-6 w-6 rounded-full border border-zinc-900 object-cover"
                         />
                       ))}
-                    {room.seats.filter(s => s.user).length > 4 && (
+                    {(room.seats || []).filter(s => s.user).length > 4 && (
                       <span className="flex h-6 w-6 items-center justify-center rounded-full bg-zinc-800 text-[9px] font-bold text-white border border-zinc-900">
-                        +{room.seats.filter(s => s.user).length - 4}
+                        +{(room.seats || []).filter(s => s.user).length - 4}
                       </span>
                     )}
                   </div>
 
                   <span className="rounded-full bg-amber-500/20 border border-amber-500/40 px-2 py-0.5 text-[9px] font-bold text-amber-300">
-                    {room.voiceSeatCount} Seats Available
+                    {room.voiceSeatCount || 6} Seats Available
                   </span>
                 </div>
               )}
@@ -200,8 +200,8 @@ export const LiveDiscoveryView: React.FC<LiveDiscoveryViewProps> = ({
             {/* Room Info Footer */}
             <div className="p-3 flex items-start gap-2.5">
               <img
-                src={room.host.avatarUrl}
-                alt={room.host.displayName}
+                src={room.host?.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100'}
+                alt={room.host?.displayName || 'Host'}
                 className="h-10 w-10 rounded-full object-cover border border-rose-500 shrink-0"
               />
               <div className="min-w-0 flex-1">
@@ -209,7 +209,7 @@ export const LiveDiscoveryView: React.FC<LiveDiscoveryViewProps> = ({
                   {room.title}
                 </h3>
                 <p className="text-[11px] text-zinc-400 truncate mt-0.5">
-                  @{room.host.username} • {room.category}
+                  @{room.host?.username || 'creator'} • {room.category}
                 </p>
                 <div className="mt-1 flex items-center gap-2 text-[10px] text-zinc-500 font-medium">
                   <span className="text-amber-400 font-bold">✨ {room.diamondCount} Diamonds</span>

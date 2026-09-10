@@ -14,6 +14,9 @@ interface AuthContextType {
   updateProfile: (data: Partial<User>) => Promise<boolean>;
   updateUserPoints: (newPoints: number) => void;
   adjustPoints: (delta: number) => Promise<number>;
+  updateUserCoins: (newCoins: number) => void;
+  adjustCoins: (delta: number) => Promise<number>;
+  rechargeCoins: (coinsToAdd: number) => Promise<number>;
   banUserLive: (durationHours?: number, reason?: string) => Promise<User | null>;
   banUserAccount: (durationDays?: number, reason?: string) => Promise<User | null>;
   resetUserBans: () => Promise<User | null>;
@@ -33,13 +36,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const saved = localStorage.getItem(LOCAL_STORAGE_USER_KEY);
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.coinBalance === undefined) {
+          parsed.coinBalance = 5000;
+        }
+        return parsed;
       } catch {
         return null;
       }
     }
     // Default to admin user for rich initial access
-    return INITIAL_USERS[0];
+    const defaultUser = INITIAL_USERS[0];
+    if (defaultUser && defaultUser.coinBalance === undefined) {
+      defaultUser.coinBalance = 5000;
+    }
+    return defaultUser;
   });
 
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -347,6 +358,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return fallbackPoints;
   };
 
+  const updateUserCoins = (newCoins: number) => {
+    if (!currentUser) return;
+    const updated = { ...currentUser, coinBalance: Math.max(0, newCoins) };
+    setCurrentUser(updated);
+    saveCustomUserLocally(updated);
+  };
+
+  const adjustCoins = async (delta: number): Promise<number> => {
+    if (!currentUser) return 0;
+    const currentCoins = currentUser.coinBalance ?? 5000;
+    const fallbackCoins = Math.max(0, currentCoins + delta);
+    updateUserCoins(fallbackCoins);
+    return fallbackCoins;
+  };
+
+  const rechargeCoins = async (coinsToAdd: number): Promise<number> => {
+    if (!currentUser) return 0;
+    const currentCoins = currentUser.coinBalance ?? 5000;
+    const newCoins = currentCoins + coinsToAdd;
+    updateUserCoins(newCoins);
+    return newCoins;
+  };
+
   const banUserLive = async (durationHours: number = 24, reason?: string): Promise<User | null> => {
     if (!currentUser) return null;
     const banUntil = new Date(Date.now() + durationHours * 3600 * 1000).toISOString();
@@ -480,6 +514,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updateProfile,
         updateUserPoints,
         adjustPoints,
+        updateUserCoins,
+        adjustCoins,
+        rechargeCoins,
         banUserLive,
         banUserAccount,
         resetUserBans,

@@ -559,7 +559,8 @@ export interface LiveRoom {
   diamondCount: number;
   status: 'live' | 'ended';
   voiceSeatCount: VoiceSeatCount; // 4, 6, or 9 seats
-  seats: LiveSeat[];
+  seats?: LiveSeat[];
+  isUserHost?: boolean;
   bannerAd?: Ad; // Rotating banner ad while live
   activeFilter?: string; // Beauty & video filters
   isMicMuted?: boolean;

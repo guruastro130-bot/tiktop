@@ -60,12 +60,28 @@ export const LiveRoomView: React.FC<LiveRoomViewProps> = ({
   const { currentUser, openAuthModal } = useAuth();
   const { recordAdImpression } = useAds();
 
-  const [room, setRoom] = useState<LiveRoom>(initialRoom);
-  
+  const [room, setRoom] = useState<LiveRoom>(() => ({
+    ...initialRoom,
+    seats: Array.isArray(initialRoom.seats) ? initialRoom.seats : [],
+    voiceSeatCount: initialRoom.voiceSeatCount || 6,
+  }));
+
+  // Sync state if initialRoom changes
+  useEffect(() => {
+    setRoom({
+      ...initialRoom,
+      seats: Array.isArray(initialRoom.seats) ? initialRoom.seats : [],
+      voiceSeatCount: initialRoom.voiceSeatCount || 6,
+    });
+  }, [initialRoom]);
+
+  const preseededRoomIds = ['live_voice_1', 'live_voice_2', 'live_voice_3', 'live_video_1'];
   const isHost = Boolean(
-    (currentUser && (currentUser.id === room.hostId || currentUser.id === room.host.id)) ||
-    Boolean(room.localMediaStream) ||
-    (room.id.startsWith('live_') && room.id !== 'live_video_1' && room.id !== 'live_voice_1')
+    room.isUserHost ??
+    (
+      Boolean(room.localMediaStream) ||
+      (!preseededRoomIds.includes(room.id) && Boolean(currentUser && (currentUser.id === room.hostId || (room.host && currentUser.id === room.host.id))))
+    )
   );
 
   const [messages, setMessages] = useState<LiveMessage[]>(() => {
@@ -88,6 +104,7 @@ export const LiveRoomView: React.FC<LiveRoomViewProps> = ({
   const [isChatVisible, setIsChatVisible] = useState<boolean>(true);
   const [isGiftModalOpen, setIsGiftModalOpen] = useState<boolean>(false);
   const [giftModalInitialCategory, setGiftModalInitialCategory] = useState<'all' | 'romantic' | 'greeting' | 'nepal' | 'luxury' | 'lucky'>('all');
+  const [giftModalTargetSeat, setGiftModalTargetSeat] = useState<number | 'host' | 'all'>('host');
   const [isViewerListOpen, setIsViewerListOpen] = useState<boolean>(false);
 
   const [cameraFacing, setCameraFacing] = useState<'user' | 'environment'>('user');
@@ -99,9 +116,6 @@ export const LiveRoomView: React.FC<LiveRoomViewProps> = ({
     return isHost ? 1 : 1240;
   });
   const [showLiveStartedBanner, setShowLiveStartedBanner] = useState<boolean>(isHost);
-  const [countdownState, setCountdownState] = useState<3 | 2 | 1 | 'live' | null>(() => {
-    return isHost ? 3 : null;
-  });
   const [isSoundboardOpen, setIsSoundboardOpen] = useState<boolean>(false);
   const [floatingHearts, setFloatingHearts] = useState<FloatingHeart[]>([]);
   const [activeGiftAnimation, setActiveGiftAnimation] = useState<{
@@ -129,59 +143,6 @@ export const LiveRoomView: React.FC<LiveRoomViewProps> = ({
       passedMediaStreamRef.current = room.localMediaStream;
     }
   }, [room.localMediaStream]);
-
-  // TikTok-Style 3, 2, 1 Countdown and Fanfare for Live Broadcast Start
-  useEffect(() => {
-    if (!isHost || countdownState === null) return;
-
-    if (countdownState === 3) {
-      try {
-        liveAudio.playCountdownTick(3);
-        if (typeof navigator !== 'undefined' && 'vibrate' in navigator) navigator.vibrate(60);
-      } catch {
-        // audio/vibrate ignored
-      }
-      const t = setTimeout(() => setCountdownState(2), 1000);
-      return () => clearTimeout(t);
-    }
-
-    if (countdownState === 2) {
-      try {
-        liveAudio.playCountdownTick(2);
-        if (typeof navigator !== 'undefined' && 'vibrate' in navigator) navigator.vibrate(60);
-      } catch {
-        // audio/vibrate ignored
-      }
-      const t = setTimeout(() => setCountdownState(1), 1000);
-      return () => clearTimeout(t);
-    }
-
-    if (countdownState === 1) {
-      try {
-        liveAudio.playCountdownTick(1);
-        if (typeof navigator !== 'undefined' && 'vibrate' in navigator) navigator.vibrate(60);
-      } catch {
-        // audio/vibrate ignored
-      }
-      const t = setTimeout(() => {
-        setCountdownState('live');
-        try {
-          liveAudio.playLiveStartFanfare();
-          if (typeof navigator !== 'undefined' && 'vibrate' in navigator) navigator.vibrate([100, 50, 200]);
-        } catch {
-          // audio/vibrate ignored
-        }
-      }, 1000);
-      return () => clearTimeout(t);
-    }
-
-    if (countdownState === 'live') {
-      const t = setTimeout(() => {
-        setCountdownState(null);
-      }, 2000);
-      return () => clearTimeout(t);
-    }
-  }, [countdownState, isHost]);
 
   // Simulated Audience Joining when Host Starts Live so Host Immediately Sees Live Activity
   useEffect(() => {
@@ -512,7 +473,7 @@ export const LiveRoomView: React.FC<LiveRoomViewProps> = ({
 
   // Check if current user is seated on any seat
   const currentSeatIndex = currentUser
-    ? room.seats.findIndex(s => s.user?.id === currentUser.id)
+    ? (room.seats || []).findIndex(s => s.user?.id === currentUser.id)
     : -1;
   const isUserSeated = currentSeatIndex !== -1;
 
@@ -571,14 +532,15 @@ export const LiveRoomView: React.FC<LiveRoomViewProps> = ({
       return;
     }
 
+    const currentSeats = room.seats || [];
     // Check if seat is occupied
-    const targetSeat = room.seats.find(s => s.seatIndex === seatIndex);
+    const targetSeat = currentSeats.find(s => s.seatIndex === seatIndex);
     if (targetSeat?.user || targetSeat?.isLocked) {
       return;
     }
 
     // Remove user from any existing seat first
-    const updatedSeats = room.seats.map(s => {
+    const updatedSeats = currentSeats.map(s => {
       if (s.user?.id === currentUser.id) {
         return { seatIndex: s.seatIndex, isLocked: false };
       }
@@ -644,7 +606,8 @@ export const LiveRoomView: React.FC<LiveRoomViewProps> = ({
   };
 
   const handleLeaveSeat = (seatIndex: number) => {
-    const updatedSeats = room.seats.map(s => {
+    const currentSeats = room.seats || [];
+    const updatedSeats = currentSeats.map(s => {
       if (s.seatIndex === seatIndex) {
         return { seatIndex, isLocked: false };
       }
@@ -657,7 +620,8 @@ export const LiveRoomView: React.FC<LiveRoomViewProps> = ({
   };
 
   const handleToggleSeatMute = (seatIndex: number) => {
-    const updatedSeats = room.seats.map(s => {
+    const currentSeats = room.seats || [];
+    const updatedSeats = currentSeats.map(s => {
       if (s.seatIndex === seatIndex) {
         return { ...s, isMuted: !s.isMuted };
       }
@@ -673,9 +637,10 @@ export const LiveRoomView: React.FC<LiveRoomViewProps> = ({
   const handleChangeSeatLayout = (newCount: VoiceSeatCount) => {
     if (!isHost) return;
 
+    const currentSeats = room.seats || [];
     // Preserve users up to newCount
     const newSeats: LiveSeat[] = Array.from({ length: newCount }, (_, idx) => {
-      const existing = room.seats.find(s => s.seatIndex === idx);
+      const existing = currentSeats.find(s => s.seatIndex === idx);
       return existing || { seatIndex: idx, isLocked: false };
     });
 
@@ -715,7 +680,8 @@ export const LiveRoomView: React.FC<LiveRoomViewProps> = ({
 
   // Host Lock Seat
   const handleHostLockSeat = (seatIndex: number) => {
-    const updatedSeats = room.seats.map(s => {
+    const currentSeats = room.seats || [];
+    const updatedSeats = currentSeats.map(s => {
       if (s.seatIndex === seatIndex) {
         return { ...s, isLocked: !s.isLocked };
       }
@@ -759,12 +725,14 @@ export const LiveRoomView: React.FC<LiveRoomViewProps> = ({
       return;
     }
 
+    const currentSeats = room.seats || [];
     const targetUser =
       targetSeatIndex !== undefined && targetSeatIndex !== 0
-        ? room.seats.find(s => s.seatIndex === targetSeatIndex)?.user
+        ? currentSeats.find(s => s.seatIndex === targetSeatIndex)?.user
         : room.host;
 
     const isLucky = Boolean(gift.isLucky || gift.category === 'lucky');
+    const recipientName = targetUser?.username || room.host?.username || 'Host';
     const giftMsg: LiveMessage = {
       id: `gift_${Date.now()}`,
       userId: currentUser.id,
@@ -772,8 +740,8 @@ export const LiveRoomView: React.FC<LiveRoomViewProps> = ({
       displayName: currentUser.displayName,
       avatarUrl: currentUser.avatarUrl,
       text: isLucky
-        ? `🎰 लक्की गिफ्ट! ${gift.nameNp} ${gift.icon} (${gift.coins.toLocaleString()} Coins) ➔ @${targetUser?.username || room.host.username} 🎉`
-        : `🎁 ${gift.nameNp} ${gift.icon} (${gift.coins.toLocaleString()} Coins) ➔ @${targetUser?.username || room.host.username}`,
+        ? `🎰 लक्की गिफ्ट! ${gift.nameNp} ${gift.icon} (${gift.coins.toLocaleString()} Coins) ➔ @${recipientName} 🎉`
+        : `🎁 ${gift.nameNp} ${gift.icon} (${gift.coins.toLocaleString()} Coins) ➔ @${recipientName}`,
       type: 'gift',
       gift,
       targetSeatIndex,
@@ -915,16 +883,16 @@ export const LiveRoomView: React.FC<LiveRoomViewProps> = ({
         <div className="flex flex-col gap-1 shrink-0">
           <div className="flex items-center gap-2 rounded-full bg-black/60 border border-white/15 p-1 pr-3 backdrop-blur-md">
             <img
-              src={room.host.avatarUrl}
-              alt={room.host.displayName}
-              onClick={() => onOpenCreatorProfile && onOpenCreatorProfile(room.host.id)}
+              src={room.host?.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100'}
+              alt={room.host?.displayName || 'Host'}
+              onClick={() => onOpenCreatorProfile && room.host?.id && onOpenCreatorProfile(room.host.id)}
               className="h-9 w-9 rounded-full object-cover border border-rose-500 cursor-pointer"
             />
             <div className="min-w-0 max-w-[95px] sm:max-w-[120px]">
-              <p className="text-xs font-black text-white truncate">{room.host.displayName}</p>
+              <p className="text-xs font-black text-white truncate">{room.host?.displayName || 'नेपाली क्रिएटर'}</p>
               <div className="flex items-center gap-1 text-[10px] text-amber-400 font-bold">
                 <Coins className="h-2.5 w-2.5" />
-                <span>{room.diamondCount.toLocaleString()} Diamonds</span>
+                <span>{(room.diamondCount || 0).toLocaleString()} Diamonds</span>
               </div>
             </div>
 
@@ -1091,29 +1059,18 @@ export const LiveRoomView: React.FC<LiveRoomViewProps> = ({
         </div>
       )}
 
-      {/* Live Reward & Moderation Safety Controller (1hr=1K pts, 2hr=+1K pts cap, 60s warning, 24h & 3-day bans) */}
-      <div className="relative z-20">
-        <LiveRewardAndSafetyController
-          isHost={isHost}
-          onCloseRoom={onClose}
-          isPersonDetected={isPersonDetected}
-          setIsPersonDetected={setIsPersonDetected}
-          liveSeconds={liveSeconds}
-          setLiveSeconds={setLiveSeconds}
-          absentSeconds={absentSeconds}
-          setAbsentSeconds={setAbsentSeconds}
-          streamType={room.type}
-        />
-      </div>
-
-      {/* Live Rotating Banner Ad (Live बस्दा Banner Add चल्ने, मानिस नदेखिँदा रोकिने, ० पोइन्ट) */}
-      <div className="relative z-20">
-        <LiveBannerAd
-          initialAd={room.bannerAd}
-          hostUsername={room.host.username}
-          isPersonDetected={isPersonDetected}
-        />
-      </div>
+      {/* Live Reward & Moderation Safety Controller (Runs in background, alerts on violation) */}
+      <LiveRewardAndSafetyController
+        isHost={isHost}
+        onCloseRoom={onClose}
+        isPersonDetected={isPersonDetected}
+        setIsPersonDetected={setIsPersonDetected}
+        liveSeconds={liveSeconds}
+        setLiveSeconds={setLiveSeconds}
+        absentSeconds={absentSeconds}
+        setAbsentSeconds={setAbsentSeconds}
+        streamType={room.type}
+      />
 
       {/* Main Interactive Stage */}
       <div
@@ -1136,8 +1093,8 @@ export const LiveRoomView: React.FC<LiveRoomViewProps> = ({
             </div>
 
             <VoiceSeatGrid
-              seatCount={room.voiceSeatCount}
-              seats={room.seats}
+              seatCount={room.voiceSeatCount || 6}
+              seats={room.seats || []}
               currentUser={currentUser}
               isHost={isHost}
               onTakeSeat={handleTakeSeat}
@@ -1149,6 +1106,11 @@ export const LiveRoomView: React.FC<LiveRoomViewProps> = ({
               onHostLockSeat={handleHostLockSeat}
               onDirectEndPartyLive={() => setShowExitConfirm(true)}
               liveDurationText={formatLiveDuration(totalLiveDurationSeconds)}
+              onGiftSeatUser={(seatIndex) => {
+                setGiftModalTargetSeat(seatIndex === 0 ? 'host' : seatIndex);
+                setGiftModalInitialCategory('all');
+                setIsGiftModalOpen(true);
+              }}
             />
           </div>
         ) : (
@@ -1546,10 +1508,11 @@ export const LiveRoomView: React.FC<LiveRoomViewProps> = ({
       <LiveGiftModal
         isOpen={isGiftModalOpen}
         onClose={() => setIsGiftModalOpen(false)}
-        seats={room.seats}
-        hostName={room.host.displayName}
+        seats={room.seats || []}
+        hostName={room.host?.displayName || 'Host'}
         onSendGift={handleSendGift}
         initialCategory={giftModalInitialCategory}
+        initialTargetSeat={giftModalTargetSeat}
       />
 
       {/* Live Viewers & Top Contributors Drawer / Modal */}
@@ -1836,84 +1799,6 @@ export const LiveRoomView: React.FC<LiveRoomViewProps> = ({
               सम्पन्न गर्नुहोस् (Done & Return)
             </button>
           </div>
-        </div>
-      )}
-
-      {/* TikTok-Style 3, 2, 1 Countdown & LIVE ON AIR Celebration Splash */}
-      {countdownState !== null && (
-        <div className="fixed inset-0 z-[300] flex flex-col items-center justify-center bg-black/92 backdrop-blur-xl p-6 text-center select-none animate-fade-in">
-          {countdownState === 'live' ? (
-            <div className="flex flex-col items-center space-y-4 animate-scale-up max-w-sm">
-              <div className="relative flex items-center justify-center">
-                <div className="absolute -inset-8 rounded-full bg-rose-500/40 blur-3xl animate-ping" />
-                <div className="relative flex h-28 w-28 items-center justify-center rounded-full bg-gradient-to-tr from-rose-600 via-red-500 to-pink-500 shadow-[0_0_60px_rgba(244,63,94,0.9)] border-4 border-white/60">
-                  <Radio className="h-14 w-14 text-white animate-pulse" />
-                </div>
-              </div>
-
-              <div className="space-y-2 pt-2">
-                <div className="inline-flex items-center gap-2 rounded-full bg-rose-600 px-4 py-1.5 text-xs font-black tracking-widest text-white shadow-lg uppercase border border-rose-400">
-                  <span className="h-2.5 w-2.5 rounded-full bg-white animate-ping" />
-                  <span>🔴 YOU ARE NOW LIVE</span>
-                </div>
-                <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-                  तपाईं प्रत्यक्ष प्रसारणमा हुनुहुन्छ!
-                </h2>
-                <p className="text-xs sm:text-sm text-zinc-300 max-w-xs mx-auto leading-relaxed">
-                  {room.type === 'voice'
-                    ? '🎉 भ्वाइस पार्टी सुरु भयो! दर्शकहरूसँग कुराकानी गर्नुहोस्।'
-                    : '📹 क्यामेरा अन-एयर छ! आफ्ना दर्शकहरूलाई स्वागत गर्नुहोस्।'
-                  }
-                </p>
-              </div>
-
-              <div className="pt-3">
-                <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-rose-300 bg-rose-950/60 border border-rose-500/30 rounded-full px-3 py-1">
-                  <span className="h-2 w-2 rounded-full bg-rose-400 animate-pulse" />
-                  प्रसारण चालु भयो...
-                </span>
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center space-y-5 animate-scale-up max-w-sm">
-              <div className="relative flex items-center justify-center">
-                <div className="absolute -inset-10 rounded-full bg-rose-600/30 blur-3xl animate-pulse" />
-                <div className="flex h-36 w-36 items-center justify-center rounded-full border-4 border-rose-500/80 bg-zinc-950/90 shadow-[0_0_50px_rgba(244,63,94,0.6)]">
-                  <span
-                    key={countdownState}
-                    className="text-7xl sm:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white via-rose-200 to-rose-500 animate-bounce"
-                  >
-                    {countdownState}
-                  </span>
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <p className="text-xs sm:text-sm font-black uppercase tracking-wider text-rose-400">
-                  {room.type === 'voice' ? '🎙️ भ्वाइस पार्टी तयार हुँदैछ' : '📹 क्यामेरा फेस लाइभ तयार हुँदैछ'}
-                </p>
-                <h3 className="text-xl sm:text-2xl font-black text-white">
-                  प्रत्यक्ष प्रसारण सुरु हुँदैछ...
-                </h3>
-                <p className="text-xs text-zinc-400">
-                  तयार हुनुहोस्, दर्शकहरूलाई तपाईंको लाइभ स्ट्रिम सिफारिस गरिँदैछ
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setCountdownState(null);
-                  try {
-                    liveAudio.playLiveStartFanfare();
-                  } catch {}
-                }}
-                className="mt-4 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 px-5 py-2 text-xs font-bold text-zinc-200 transition-colors cursor-pointer active:scale-95"
-              >
-                सिधै लाइभ जानुहोस् (Skip) &gt;&gt;
-              </button>
-            </div>
-          )}
         </div>
       )}
 

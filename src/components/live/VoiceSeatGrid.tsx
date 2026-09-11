@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Mic, MicOff, Plus, Lock, Crown, MoreVertical, LogOut, Volume2, ShieldAlert, Clock, X, Gift } from 'lucide-react';
+import { Mic, MicOff, Plus, Check, Lock, Crown, MoreVertical, LogOut, Volume2, ShieldAlert, Clock, X, Gift } from 'lucide-react';
 import { LiveSeat, VoiceSeatCount, User } from '../../types';
 
 interface VoiceSeatGridProps {
@@ -36,6 +36,19 @@ export const VoiceSeatGrid: React.FC<VoiceSeatGridProps> = ({
   onGiftSeatUser,
 }) => {
   const [selectedSeatIndex, setSelectedSeatIndex] = useState<number | null>(null);
+  const [followedSeatUserIds, setFollowedSeatUserIds] = useState<Set<string>>(new Set());
+
+  const handleToggleFollowSeatUser = (userId: string) => {
+    setFollowedSeatUserIds(prev => {
+      const next = new Set(prev);
+      if (next.has(userId)) {
+        next.delete(userId);
+      } else {
+        next.add(userId);
+      }
+      return next;
+    });
+  };
 
   // Normalize seats array to match the requested seatCount (4, 6, or 9)
   const safeSeats = Array.isArray(seats) ? seats : [];
@@ -176,10 +189,37 @@ export const VoiceSeatGrid: React.FC<VoiceSeatGridProps> = ({
                           e.stopPropagation();
                           if (seat.user) onGiftSeatUser(index, seat.user);
                         }}
-                        className="absolute -top-1 -right-1 rounded-full bg-gradient-to-r from-rose-500 to-pink-500 p-1 shadow-md text-white hover:scale-110 active:scale-95 transition-all cursor-pointer border border-white/40"
+                        className="absolute -top-1 -right-1 rounded-full bg-gradient-to-r from-rose-500 to-pink-500 p-1 shadow-md text-white hover:scale-110 active:scale-95 transition-all cursor-pointer border border-white/40 z-10"
                         title="उपहार पठाउनुहोस् (Send Gift)"
                       >
                         <Gift className="h-2.5 w-2.5" />
+                      </button>
+                    )}
+
+                    {/* + Follow Icon Button on Profile for quick 1-click follow */}
+                    {!isCurrentUserHere && seat.user && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleToggleFollowSeatUser(seat.user?.id || `user_${index}`);
+                        }}
+                        className={`absolute -bottom-1 -left-1 flex items-center justify-center h-4.5 w-4.5 rounded-full shadow-md transition-all active:scale-90 cursor-pointer border border-zinc-950 z-10 ${
+                          followedSeatUserIds.has(seat.user?.id || `user_${index}`)
+                            ? 'bg-emerald-500 text-white'
+                            : 'bg-rose-500 hover:bg-rose-600 text-white animate-pulse'
+                        }`}
+                        title={
+                          followedSeatUserIds.has(seat.user?.id || `user_${index}`)
+                            ? `${seat.user?.displayName || 'User'} Following`
+                            : `${seat.user?.displayName || 'User'} लाई फलो गर्नुहोस् (+ Follow)`
+                        }
+                      >
+                        {followedSeatUserIds.has(seat.user?.id || `user_${index}`) ? (
+                          <Check className="h-2.5 w-2.5 stroke-[3]" />
+                        ) : (
+                          <Plus className="h-2.5 w-2.5 stroke-[3]" />
+                        )}
                       </button>
                     )}
 
@@ -225,9 +265,36 @@ export const VoiceSeatGrid: React.FC<VoiceSeatGridProps> = ({
               <div className="mt-1 w-full flex flex-col items-center">
                 {isOccupied ? (
                   <>
-                    <p className="text-[11px] font-bold text-white truncate max-w-[85px]">
-                      {isCurrentUserHere ? 'म (You)' : seat.user?.displayName || seat.user?.username}
-                    </p>
+                    <div className="flex items-center justify-center gap-1 max-w-[95px]">
+                      <p className="text-[11px] font-bold text-white truncate">
+                        {isCurrentUserHere ? 'म (You)' : seat.user?.displayName || seat.user?.username}
+                      </p>
+                      {!isCurrentUserHere && seat.user && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleFollowSeatUser(seat.user?.id || `user_${index}`);
+                          }}
+                          className={`flex h-3.5 w-3.5 items-center justify-center rounded-full transition-transform active:scale-90 shrink-0 ${
+                            followedSeatUserIds.has(seat.user?.id || `user_${index}`)
+                              ? 'bg-emerald-500/30 text-emerald-400 border border-emerald-500/50'
+                              : 'bg-rose-500 text-white hover:bg-rose-600'
+                          }`}
+                          title={
+                            followedSeatUserIds.has(seat.user?.id || `user_${index}`)
+                              ? 'Following'
+                              : 'Follow (+)'
+                          }
+                        >
+                          {followedSeatUserIds.has(seat.user?.id || `user_${index}`) ? (
+                            <Check className="h-2 w-2 stroke-[3]" />
+                          ) : (
+                            <Plus className="h-2 w-2 stroke-[3]" />
+                          )}
+                        </button>
+                      )}
+                    </div>
                     <span className="text-[9px] font-medium text-zinc-400">
                       {isSeatHost ? '👑 Host' : `सिट ${index + 1}`}
                     </span>

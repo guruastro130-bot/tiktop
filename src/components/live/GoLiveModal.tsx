@@ -157,7 +157,7 @@ export const GoLiveModal: React.FC<GoLiveModalProps> = ({
 
   const finalizeStartLive = () => {
     const hostUser = currentUser || INITIAL_USERS[0];
-    const assignedBanner = enableBannerAds ? getRandomBannerAd() : undefined;
+    const assignedBanner = getRandomBannerAd();
 
     const newRoom: LiveRoom = {
       id: `live_${Date.now()}`,

@@ -250,7 +250,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
 
   const finalizeLaunchLive = (type: LiveStreamType) => {
     const hostUser = currentUser || INITIAL_USERS[0];
-    const assignedBanner = enableBannerAds ? getRandomBannerAd() : undefined;
+    const assignedBanner = getRandomBannerAd();
     const newRoom: LiveRoom = {
       id: `live_${Date.now()}`,
       hostId: hostUser.id,
@@ -530,7 +530,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
     try {
       let finalVideoUrl = videoUrl;
 
-      // If user uploaded a local file, save locally to IndexedDB & attempt server upload
+      // If user uploaded a local file, save locally to IndexedDB & attempt fast server upload if small
       if (selectedFile) {
         setStageProgressText('मिडिया स्टोरेजमा सुरक्षित गरिँदैछ...');
         
@@ -538,48 +538,54 @@ export const UploadView: React.FC<UploadViewProps> = ({
         try {
           await saveVideoBlob(generatedVidId, selectedFile, selectedFile.name);
         } catch {
-          // continue
+          // continue safely
         }
 
-        // Attempt server upload if available
-        try {
-          const base64Data = await new Promise<string>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result as string);
-            reader.onerror = () => reject(new Error('भिडियो पढ्न सकिएन।'));
-            reader.readAsDataURL(selectedFile);
-          });
+        // Advance progress immediately past 15%
+        setUploadProgress(35);
 
-          const uploadRes = await fetch('/api/videos/upload', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'x-user-id': currentUser.id,
-            },
-            body: JSON.stringify({
-              base64Data,
-              fileName: selectedFile.name,
-              mimeType: selectedFile.type || 'video/mp4',
-            }),
-            signal: abortController.signal,
-          });
+        // Attempt server upload ONLY if small (< 3MB) to avoid payload limits or Vercel timeouts
+        if (selectedFile.size < 3 * 1024 * 1024) {
+          try {
+            const timeoutSignal = AbortSignal.timeout ? AbortSignal.timeout(2000) : undefined;
+            const base64Data = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(reader.result as string);
+              reader.onerror = () => reject(new Error('भिडियो पढ्न सकिएन।'));
+              reader.readAsDataURL(selectedFile);
+            });
 
-          if (uploadRes.ok) {
-            const upData = await uploadRes.json();
-            if (upData?.streamUrl) {
-              finalVideoUrl = upData.streamUrl;
-              setVideoUrl(finalVideoUrl);
+            const uploadRes = await fetch('/api/videos/upload', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'x-user-id': currentUser.id,
+              },
+              body: JSON.stringify({
+                base64Data,
+                fileName: selectedFile.name,
+                mimeType: selectedFile.type || 'video/mp4',
+              }),
+              signal: timeoutSignal || abortController.signal,
+            });
+
+            if (uploadRes.ok) {
+              const upData = await uploadRes.json();
+              if (upData?.streamUrl) {
+                finalVideoUrl = upData.streamUrl;
+                setVideoUrl(finalVideoUrl);
+              }
             }
+          } catch {
+            // Server upload bypassed or failed - use local blob url safely
           }
-        } catch {
-          // Server upload bypassed or failed - use local blob url safely
         }
       }
 
-      // Step 1: Upload progress transmission animation
-      for (let p = 30; p <= 95; p += 25) {
+      // Step 1: Upload progress transmission animation - rapid & smooth
+      for (let p = 50; p <= 95; p += 25) {
         if (abortController.signal.aborted) return;
-        await new Promise(r => setTimeout(r, 50));
+        await new Promise(r => setTimeout(r, 40));
         setUploadProgress(p);
       }
       setUploadProgress(100);

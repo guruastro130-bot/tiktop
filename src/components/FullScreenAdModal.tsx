@@ -88,9 +88,9 @@ export const FullScreenAdModal: React.FC<FullScreenAdModalProps> = ({ ad, isOpen
                 )}
               </div>
               <div className="flex items-center gap-1 text-[10px] text-zinc-400">
-                <span className="inline-flex items-center gap-0.5 text-amber-300 font-medium">
+                <span className="inline-flex items-center gap-1 text-amber-300 font-bold">
                   <Sparkles className="h-2.5 w-2.5 text-amber-400" />
-                  Rewarded Ad (10 Videos Watched)
+                  🎁 पुरस्कृत विज्ञापन (Rewarded Ad Only)
                 </span>
               </div>
             </div>

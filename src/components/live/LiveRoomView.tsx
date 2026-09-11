@@ -16,10 +16,13 @@ import {
   Layers,
   Smile,
   Plus,
+  Check,
   Trophy,
   Gift,
   Crown,
   RefreshCw,
+  Video,
+  VideoOff,
   MessageSquare,
   Power,
   Eye,
@@ -27,6 +30,10 @@ import {
   Clock,
   CheckCircle2,
   Award,
+  UserX,
+  UserCheck,
+  AlertTriangle,
+  Copy,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { LiveRoom, LiveSeat, LiveMessage, LiveGift, VoiceSeatCount, User } from '../../types';
@@ -125,17 +132,42 @@ export const LiveRoomView: React.FC<LiveRoomViewProps> = ({
 
   const [isMicMuted, setIsMicMuted] = useState<boolean>(false);
   const [isFollowingHost, setIsFollowingHost] = useState<boolean>(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState<boolean>(false);
+  const [shareSuccessToast, setShareSuccessToast] = useState<string | null>(null);
+
+  const handleShareLive = async () => {
+    const shareData = {
+      title: room.title || 'नेपाल प्रत्यक्ष प्रसारण (TikTok Nepal Live)',
+      text: `${room.host?.displayName || 'नेपाली क्रिएटर'} को लाइभ प्रसारण हेर्नुहोस्! 🔴 #NepalLive`,
+      url: window.location.href,
+    };
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+      } else {
+        setIsShareModalOpen(true);
+      }
+    } catch {
+      setIsShareModalOpen(true);
+    }
+  };
+
+  const handleCopyLiveLink = () => {
+    try {
+      navigator.clipboard.writeText(window.location.href);
+      setShareSuccessToast('लाइभ लिङ्क कपी भयो! 🔗');
+      setTimeout(() => setShareSuccessToast(null), 2500);
+    } catch {
+      setShareSuccessToast('लिङ्क कपी भयो!');
+      setTimeout(() => setShareSuccessToast(null), 2500);
+    }
+  };
+
   const videoStreamRef = useRef<HTMLVideoElement>(null);
   const internalCameraStreamRef = useRef<MediaStream | null>(null);
   const passedMediaStreamRef = useRef<MediaStream | undefined>(room.localMediaStream);
-  const [isCameraActive, setIsCameraActive] = useState<boolean>(() => {
-    if (!isHost || room.type !== 'video') return false;
-    return Boolean(
-      room.localMediaStream &&
-      room.localMediaStream.active &&
-      room.localMediaStream.getVideoTracks().some(t => t.readyState === 'live')
-    );
-  });
+  const [isCameraActive, setIsCameraActive] = useState<boolean>(true);
+  const [isCameraOff, setIsCameraOff] = useState<boolean>(room.isCameraOff || false);
 
   // Keep passedMediaStreamRef updated if room updates
   useEffect(() => {
@@ -404,25 +436,96 @@ export const LiveRoomView: React.FC<LiveRoomViewProps> = ({
     points: number;
   } | null>(null);
 
-  // Unconditional Master Live Broadcast Clock: increments every second continuously
+  // Live Broadcast Clock:
+  // Live duration MUST NOT count when person is not detected in Face Live!
+  // It pauses automatically and resumes only when person is present or 'I see...' is tapped.
   useEffect(() => {
     if (room.status === 'ended' || showLiveEndedSummary) return;
 
+    const isLiveActiveAndCounting = room.type === 'voice' ? true : isPersonDetected;
+
+    if (!isLiveActiveAndCounting) {
+      // Live time paused! Count absent seconds instead
+      const absentTimer = setInterval(() => {
+        setAbsentSeconds(prev => prev + 1);
+      }, 1000);
+      return () => clearInterval(absentTimer);
+    }
+
     const timer = setInterval(() => {
       setTotalLiveDurationSeconds(prev => prev + 1);
-
-      // Presence-scoped seconds for live reward milestones
-      const effectivePresence = room.type === 'voice' ? true : isPersonDetected;
-      if (effectivePresence) {
-        setLiveSeconds(prev => prev + 1);
-        setAbsentSeconds(0);
-      } else {
-        setAbsentSeconds(prev => prev + 1);
-      }
+      setLiveSeconds(prev => prev + 1);
+      setAbsentSeconds(0);
     }, 1000);
 
     return () => clearInterval(timer);
   }, [isPersonDetected, room.status, room.type, showLiveEndedSummary]);
+
+  // Automated Camera & Person Detection Monitor
+  // Automatically detects if camera is covered/dark or video stream inactive
+  useEffect(() => {
+    if (room.type !== 'video' || !isHost || room.status === 'ended' || showLiveEndedSummary) return;
+
+    const sampleCanvas = document.createElement('canvas');
+    sampleCanvas.width = 32;
+    sampleCanvas.height = 32;
+    const ctx = sampleCanvas.getContext('2d', { willReadFrequently: true });
+
+    let lowBrightnessCount = 0;
+    let warmUpTicks = 0;
+
+    const detectorInterval = setInterval(() => {
+      const videoEl = videoStreamRef.current;
+      if (!videoEl || videoEl.paused || videoEl.ended || !isPersonDetected) {
+        return;
+      }
+
+      warmUpTicks++;
+      // Allow initial 8-10 seconds for video stream and camera to stabilize
+      if (warmUpTicks < 3) {
+        return;
+      }
+
+      // Check stream video track status only if actively using internal camera
+      const stream = internalCameraStreamRef.current;
+      if (stream && stream.getVideoTracks().length > 0) {
+        const videoTracks = stream.getVideoTracks();
+        if (videoTracks.every(t => t.readyState === 'ended' || !t.enabled)) {
+          setIsPersonDetected(false);
+          return;
+        }
+      }
+
+      // Check canvas luminance
+      if (videoEl.videoWidth > 0 && ctx) {
+        try {
+          ctx.drawImage(videoEl, 0, 0, 32, 32);
+          const imgData = ctx.getImageData(0, 0, 32, 32);
+          const data = imgData.data;
+          let totalBrightness = 0;
+          for (let i = 0; i < data.length; i += 4) {
+            totalBrightness += (data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114);
+          }
+          const avgBrightness = totalBrightness / (32 * 32);
+
+          // If camera is covered or pitch dark (e.g. host walked away or camera down)
+          if (avgBrightness < 6) {
+            lowBrightnessCount++;
+            if (lowBrightnessCount >= 2) {
+              setIsPersonDetected(false);
+              lowBrightnessCount = 0;
+            }
+          } else {
+            lowBrightnessCount = 0;
+          }
+        } catch {
+          // Cross-origin fallback
+        }
+      }
+    }, 3500);
+
+    return () => clearInterval(detectorInterval);
+  }, [room.type, isHost, room.status, showLiveEndedSummary, isPersonDetected]);
 
   // Format total seconds into HH:MM:SS or MM:SS
   const formatLiveDuration = (totalSec: number) => {
@@ -484,7 +587,7 @@ export const LiveRoomView: React.FC<LiveRoomViewProps> = ({
     }
   }, [messages]);
 
-  // Periodic simulated viewers activity & realistic chat
+  // Periodic simulated viewer joins (clean stream focusing on Viewer Joins)
   useEffect(() => {
     const chatInterval = setInterval(() => {
       const demoNames = [
@@ -492,35 +595,30 @@ export const LiveRoomView: React.FC<LiveRoomViewProps> = ({
         { name: 'Kiran Thapa', user: 'kiran_t', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100' },
         { name: 'Suman Shrestha', user: 'suman_np', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100' },
         { name: 'Anjali Gurung', user: 'anjali_g', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100' },
-      ];
-      const demoPhrases = [
-        'धेरै राम्रो भ्वाइस रुम! 👏',
-        'जय नेपाल 🇳🇵 सबैजनालाई नमस्कार!',
-        'सिट नम्बर ३ ले राम्रो गाउनुभयो 🎵',
-        'Rose पठाइदिएँ है! 🌹',
-        'अझै रमाइलो कुरा गरौँ न!',
+        { name: 'Bikash Tamang', user: 'bikash_t', avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100' },
+        { name: 'Sunita KC', user: 'sunita_kc', avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=100' },
       ];
 
       const randomUser = demoNames[Math.floor(Math.random() * demoNames.length)];
-      const randomText = demoPhrases[Math.floor(Math.random() * demoPhrases.length)];
 
       const newMsg: LiveMessage = {
-        id: `msg_${Date.now()}`,
+        id: `join_${Date.now()}_${Math.random()}`,
         userId: randomUser.user,
         username: randomUser.user,
         displayName: randomUser.name,
         avatarUrl: randomUser.avatar,
-        text: randomText,
-        type: 'chat',
+        text: '👋 लाइभमा जोडिनुभयो! (Joined Live)',
+        type: 'join',
         createdAt: new Date().toISOString(),
       };
 
-      setMessages(prev => [...prev.slice(-40), newMsg]);
+      setMessages(prev => [...prev.slice(-30), newMsg]);
+      setLiveViewerCount(prev => prev + 1);
       setRoom(prev => ({
         ...prev,
-        likesCount: prev.likesCount + Math.floor(Math.random() * 5 + 1),
+        likesCount: prev.likesCount + Math.floor(Math.random() * 3 + 1),
       }));
-    }, 4500);
+    }, 4000);
 
     return () => clearInterval(chatInterval);
   }, []);
@@ -795,79 +893,75 @@ export const LiveRoomView: React.FC<LiveRoomViewProps> = ({
       <div className="absolute inset-0 z-0 overflow-hidden bg-black">
         {room.type === 'video' ? (
           <div className="relative h-full w-full">
-            <video
-              ref={el => {
-                videoStreamRef.current = el;
-                if (!el) return;
-                el.muted = true;
-                const stream = passedMediaStreamRef.current || room.localMediaStream || internalCameraStreamRef.current;
-                if (stream && stream.active && stream.getVideoTracks().some(t => t.readyState === 'live')) {
-                  if (el.srcObject !== stream) {
-                    el.srcObject = stream;
+            {!isCameraOff ? (
+              <video
+                ref={el => {
+                  videoStreamRef.current = el;
+                  if (!el) return;
+                  el.muted = true;
+                  const stream = passedMediaStreamRef.current || room.localMediaStream || internalCameraStreamRef.current;
+                  if (stream && stream.active && stream.getVideoTracks().some(t => t.readyState === 'live')) {
+                    if (el.srcObject !== stream) {
+                      el.srcObject = stream;
+                    }
+                    el.play().catch(() => {});
+                    setIsCameraActive(true);
+                  } else if (!el.srcObject) {
+                    const fallbackSrc = room.streamUrl || '/videos/sample_dance.mp4';
+                    if (!el.src || (!el.src.includes('sample_dance.mp4') && el.src !== fallbackSrc)) {
+                      el.src = fallbackSrc;
+                    }
+                    el.play().catch(() => {});
+                    setIsCameraActive(true);
                   }
-                  el.play().catch(() => {});
-                  setIsCameraActive(true);
-                } else if (!el.srcObject) {
-                  const fallbackSrc = room.streamUrl || '/videos/sample_dance.mp4';
-                  if (!el.src || (!el.src.includes('sample_dance.mp4') && el.src !== fallbackSrc)) {
-                    el.src = fallbackSrc;
+                }}
+                autoPlay
+                loop
+                playsInline
+                muted
+                onPlay={() => setIsCameraActive(true)}
+                onLoadedData={() => setIsCameraActive(true)}
+                onError={() => {
+                  if (videoStreamRef.current) {
+                    videoStreamRef.current.src = '/videos/sample_dance.mp4';
+                    videoStreamRef.current.muted = true;
+                    videoStreamRef.current.play().catch(() => {});
                   }
-                  el.play().catch(() => {});
                   setIsCameraActive(true);
-                }
-              }}
-              autoPlay
-              loop
-              playsInline
-              muted
-              onPlay={() => setIsCameraActive(true)}
-              onLoadedData={() => setIsCameraActive(true)}
-              onError={() => {
-                // If any error occurs, fallback to sample video immediately
-                if (videoStreamRef.current) {
-                  videoStreamRef.current.src = '/videos/sample_dance.mp4';
-                  videoStreamRef.current.muted = true;
-                  videoStreamRef.current.play().catch(() => {});
-                }
-                setIsCameraActive(true);
-              }}
-              className={`h-full w-full object-cover brightness-95 ${
-                activeFilter === 'radiant' ? 'contrast-125 saturate-150' :
-                activeFilter === 'warm' ? 'sepia-50 saturate-125' :
-                activeFilter === 'velvet' ? 'brightness-90 contrast-125' :
-                activeFilter === 'noir' ? 'grayscale contrast-150' : ''
-              }`}
-            />
-            <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black/80 pointer-events-none" />
-
-            {/* Connecting / Loading Fallback Screen */}
-            {!isCameraActive && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-950/90 backdrop-blur-xs z-10">
-                <div className="relative mb-3">
-                  <span className="absolute -inset-4 rounded-full bg-rose-500/30 blur-xl animate-pulse" />
+                }}
+                className={`h-full w-full object-cover object-[center_15%] brightness-95 ${
+                  activeFilter === 'radiant' ? 'contrast-125 saturate-150' :
+                  activeFilter === 'warm' ? 'sepia-50 saturate-125' :
+                  activeFilter === 'velvet' ? 'brightness-90 contrast-125' :
+                  activeFilter === 'noir' ? 'grayscale contrast-150' : ''
+                }`}
+              />
+            ) : (
+              /* Camera Off Host Stage View */
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-950 p-6 text-center select-none">
+                <div className="relative mb-4">
+                  <span className="absolute -inset-6 rounded-full bg-rose-500/25 blur-xl animate-pulse" />
                   <img
                     src={room.host.avatarUrl}
                     alt={room.host.displayName}
-                    className="relative h-24 w-24 rounded-full border-4 border-rose-500 object-cover shadow-2xl"
+                    className="relative h-28 w-28 rounded-full border-4 border-rose-500 object-cover shadow-2xl"
                   />
-                  <span className="absolute bottom-0 right-0 h-6 w-6 rounded-full bg-rose-600 border-2 border-white flex items-center justify-center text-[10px]">
+                  <span className="absolute bottom-1 right-1 h-7 w-7 rounded-full bg-rose-600 border-2 border-white flex items-center justify-center text-xs shadow">
                     🔴
                   </span>
                 </div>
-                <p className="text-sm font-black text-white">{room.host.displayName} LIVE</p>
-                <p className="text-xs text-rose-400 font-semibold mt-1 animate-pulse">प्रत्यक्ष प्रसारण चालु हुँदैछ...</p>
+                <h2 className="text-xl font-black text-white">{room.host.displayName}</h2>
+                <p className="text-xs text-rose-300 font-bold mt-1">🔴 प्रत्यक्ष अडियो प्रसारण चालु छ (Live Audio On)</p>
+                <div className="flex items-center gap-1 mt-3">
+                  <span className="w-1 bg-rose-500 h-3 animate-pulse rounded-full" />
+                  <span className="w-1 bg-rose-400 h-6 animate-bounce rounded-full" />
+                  <span className="w-1 bg-rose-500 h-4 animate-pulse rounded-full" />
+                  <span className="w-1 bg-rose-400 h-7 animate-bounce rounded-full" />
+                  <span className="w-1 bg-rose-500 h-2 animate-pulse rounded-full" />
+                </div>
               </div>
             )}
-
-            {isHost && (
-              <div className="absolute top-24 left-4 z-20 flex items-center gap-1.5 rounded-full bg-black/70 backdrop-blur-md px-3 py-1 text-[11px] font-bold text-white border border-white/15 shadow">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500" />
-                </span>
-                <span>🎥 क्यामेरा प्रत्यक्ष प्रसारण (Camera Live)</span>
-              </div>
-            )}
+            <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black/80 pointer-events-none" />
           </div>
         ) : (
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-rose-950/40 via-zinc-950 to-black">
@@ -877,17 +971,45 @@ export const LiveRoomView: React.FC<LiveRoomViewProps> = ({
         )}
       </div>
 
-      {/* Top Header Controls Bar */}
-      <div className="relative z-20 flex items-start justify-between p-3.5 backdrop-blur-xs gap-2">
+      {/* 1. Topmost: Live Rotating Sponsor Banner Ad (mathi sabai vanda agadi) */}
+      <div className="relative z-30 px-3 pt-2.5 pb-1">
+        <LiveBannerAd
+          initialAd={room.bannerAd}
+          hostUsername={room.host?.username || 'host'}
+          isPersonDetected={room.type === 'voice' ? true : isPersonDetected}
+        />
+      </div>
+
+      {/* 2. Below Ad Banner: Host Profile, Category, Viewers & Close Button */}
+      <div className="relative z-20 flex items-start justify-between px-3.5 py-1.5 backdrop-blur-xs gap-2">
         {/* Host Profile Capsule & Category Tag */}
         <div className="flex flex-col gap-1 shrink-0">
-          <div className="flex items-center gap-2 rounded-full bg-black/60 border border-white/15 p-1 pr-3 backdrop-blur-md">
-            <img
-              src={room.host?.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100'}
-              alt={room.host?.displayName || 'Host'}
-              onClick={() => onOpenCreatorProfile && room.host?.id && onOpenCreatorProfile(room.host.id)}
-              className="h-9 w-9 rounded-full object-cover border border-rose-500 cursor-pointer"
-            />
+          <div className="flex items-center gap-2 rounded-full bg-black/65 border border-white/15 p-1 pr-2.5 backdrop-blur-md shadow-lg">
+            {/* Host Avatar with + Follow Icon directly on edge */}
+            <div className="relative shrink-0">
+              <img
+                src={room.host?.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100'}
+                alt={room.host?.displayName || 'Host'}
+                onClick={() => onOpenCreatorProfile && room.host?.id && onOpenCreatorProfile(room.host.id)}
+                className="h-9 w-9 rounded-full object-cover border border-rose-500 cursor-pointer"
+              />
+              {!isHost && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsFollowingHost(prev => !prev);
+                  }}
+                  className={`absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full text-white shadow-md transition-transform hover:scale-110 active:scale-95 cursor-pointer border border-zinc-950 ${
+                    isFollowingHost ? 'bg-emerald-500' : 'bg-rose-500 animate-pulse'
+                  }`}
+                  title={isFollowingHost ? 'Following' : 'होस्टलाई फलो गर्नुहोस् (+ Follow)'}
+                >
+                  {isFollowingHost ? <Check className="h-2.5 w-2.5 stroke-[3]" /> : <Plus className="h-2.5 w-2.5 stroke-[3]" />}
+                </button>
+              )}
+            </div>
+
             <div className="min-w-0 max-w-[95px] sm:max-w-[120px]">
               <p className="text-xs font-black text-white truncate">{room.host?.displayName || 'नेपाली क्रिएटर'}</p>
               <div className="flex items-center gap-1 text-[10px] text-amber-400 font-bold">
@@ -900,13 +1022,24 @@ export const LiveRoomView: React.FC<LiveRoomViewProps> = ({
               <button
                 type="button"
                 onClick={() => setIsFollowingHost(prev => !prev)}
-                className={`rounded-full px-2.5 py-1 text-[10px] font-extrabold transition-all active:scale-95 shrink-0 ${
+                className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-black transition-all active:scale-95 shrink-0 cursor-pointer ${
                   isFollowingHost
-                    ? 'bg-zinc-800 text-zinc-300'
-                    : 'bg-rose-500 text-white shadow hover:bg-rose-600'
+                    ? 'bg-zinc-800 text-emerald-400 border border-emerald-500/30'
+                    : 'bg-gradient-to-r from-rose-500 to-pink-500 text-white shadow hover:brightness-110'
                 }`}
+                title={isFollowingHost ? 'Following' : 'होस्टलाई फलो गर्नुहोस् (+ Follow)'}
               >
-                {isFollowingHost ? 'Following' : '+ Follow'}
+                {isFollowingHost ? (
+                  <>
+                    <Check className="h-3 w-3 stroke-[3]" />
+                    <span>Following</span>
+                  </>
+                ) : (
+                  <>
+                    <Plus className="h-3 w-3 stroke-[3]" />
+                    <span>Follow</span>
+                  </>
+                )}
               </button>
             )}
           </div>
@@ -927,75 +1060,37 @@ export const LiveRoomView: React.FC<LiveRoomViewProps> = ({
           </div>
         </div>
 
-        {/* Live Count & Viewers Bar */}
+        {/* Clean Live Viewers Count & Top Right Exit/End Button */}
         <div className="flex items-center gap-1.5 sm:gap-2">
-          {/* Unmistakable Live Status & Ticking Clock Indicator: 🔴 LIVE • MM:SS */}
-          <div className="flex items-center gap-1.5 rounded-full bg-gradient-to-r from-red-600 via-rose-600 to-pink-600 px-2.5 sm:px-3 py-1 text-xs font-black text-white shadow-[0_0_18px_rgba(225,29,72,0.7)] border border-rose-400/50 ring-2 ring-red-500/40">
-            <span className="relative flex h-2.5 w-2.5 shrink-0">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-80" />
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-white shadow-sm" />
-            </span>
-            <span className="tracking-tight text-[11px] sm:text-xs whitespace-nowrap font-black">
-              {isHost ? '🔴 ON AIR' : '🔴 LIVE'}
-            </span>
-            <span 
-              className="font-mono text-[11px] sm:text-xs bg-black/60 px-1.5 py-0.5 rounded text-white font-black border border-white/20 flex items-center gap-1 shadow-inner"
-              title="लाइभ समयावधि (Live Duration: Minutes & Seconds)"
-            >
-              <Clock className="h-3 w-3 text-rose-300 animate-pulse shrink-0" />
-              <span>{formatLiveDuration(totalLiveDurationSeconds)}</span>
-            </span>
-          </div>
-
-          {/* Real-time Interactive Live Count Capsule */}
+          {/* Simple Clean Live Viewer Count */}
           <button
             type="button"
             onClick={() => setIsViewerListOpen(true)}
-            className="flex items-center gap-1.5 rounded-full bg-black/70 border border-white/20 py-1 px-2.5 sm:px-3 backdrop-blur-md hover:bg-black/85 transition-all cursor-pointer group active:scale-95 shadow-lg ring-1 ring-rose-500/30"
-            title="लाइभ दर्शक काउन्ट तथा सूची हेर्नुहोस् (Live Viewers Count)"
+            className="flex items-center gap-1.5 rounded-full bg-black/60 border border-white/15 py-1 px-2.5 backdrop-blur-md hover:bg-black/80 transition-all cursor-pointer group active:scale-95 shadow"
+            title="लाइभ दर्शक हेर्नुहोस् (Live Viewers)"
           >
-            <Users className="h-3.5 w-3.5 text-rose-400 shrink-0 animate-pulse" />
-            <div className="flex items-baseline gap-1">
-              <span className="text-[10px] text-zinc-300 font-bold uppercase tracking-wider hidden xs:inline">
-                Live Count:
-              </span>
-              <span className="text-xs sm:text-sm font-black text-white font-mono">
-                {liveViewerCount.toLocaleString()}
-              </span>
-            </div>
+            <Users className="h-3.5 w-3.5 text-rose-400 shrink-0" />
+            <span className="text-xs font-black text-white font-mono">
+              {liveViewerCount.toLocaleString()}
+            </span>
             <ChevronDown className="h-3 w-3 text-zinc-400 group-hover:text-white transition-colors shrink-0" />
           </button>
 
-          {/* Direct Cross (X) Option to End Live / Party Live for Host */}
+          {/* Exit / End Live Button with Cross (✕) */}
           {isHost ? (
-            <div className="flex items-center gap-1">
-              {/* Direct End Live Pill Button with Cross */}
-              <button
-                type="button"
-                id="direct-end-live-btn"
-                onClick={() => setShowExitConfirm(true)}
-                className="flex items-center gap-1.5 rounded-full bg-gradient-to-r from-red-600 via-rose-600 to-red-700 hover:from-red-500 hover:to-rose-500 border border-red-300/70 px-2.5 sm:px-3 py-1.5 text-xs font-black text-white shadow-[0_0_16px_rgba(220,38,38,0.8)] backdrop-blur-md transition-all active:scale-95 shrink-0 cursor-pointer ring-2 ring-red-500/50"
-                title="प्रत्यक्ष प्रसारण अन्त्य गर्नुहोस् (End LIVE ✕)"
-              >
-                <X className="h-4 w-4 text-white stroke-[3] shrink-0" />
-                <span className="font-black text-[11px] sm:text-xs whitespace-nowrap">
-                  {room.type === 'voice' ? 'Party End ✕' : 'End Live ✕'}
-                </span>
-              </button>
-
-              {/* Direct Circular Close Cross Button (TikTok Style) */}
-              <button
-                type="button"
-                id="direct-close-cross-btn"
-                onClick={() => setShowExitConfirm(true)}
-                className="flex items-center justify-center h-8 w-8 rounded-full bg-red-600/90 hover:bg-red-500 border border-white/30 text-white shadow-lg backdrop-blur-md transition-transform active:scale-90 shrink-0 cursor-pointer"
-                title="Direct Close ✕"
-              >
-                <X className="h-4 w-4 stroke-[3]" />
-              </button>
-            </div>
+            <button
+              type="button"
+              id="direct-end-live-btn"
+              onClick={() => setShowExitConfirm(true)}
+              className="flex items-center gap-1 rounded-full bg-red-600/90 hover:bg-red-500 border border-red-400/60 px-3 py-1 text-xs font-black text-white shadow-lg backdrop-blur-md transition-all active:scale-95 shrink-0 cursor-pointer"
+              title="लाइभ अन्त्य गर्नुहोस् (End Live ✕)"
+            >
+              <X className="h-3.5 w-3.5 stroke-[3]" />
+              <span className="font-black text-[11px] whitespace-nowrap">
+                {room.type === 'voice' ? 'Party End ✕' : 'End ✕'}
+              </span>
+            </button>
           ) : (
-            /* Close Cross Button for Viewers */
             <button
               type="button"
               onClick={onClose}
@@ -1007,57 +1102,6 @@ export const LiveRoomView: React.FC<LiveRoomViewProps> = ({
           )}
         </div>
       </div>
-
-      {/* Prominent Live Duration Banner - Always visible at top so host never needs to exit to see time */}
-      <div className="relative z-20 mx-auto -mt-1 mb-1 flex items-center justify-center px-3">
-        <div 
-          id="master-live-clock-badge"
-          className="flex items-center gap-2 rounded-full bg-black/80 border border-rose-500/40 px-3.5 py-1 backdrop-blur-md shadow-lg shadow-black/50"
-          title="लाइभ बसेको समय: मिनेट र सेकेन्ड (Live Duration)"
-        >
-          <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75" />
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500" />
-          </span>
-          <Clock className="h-3.5 w-3.5 text-rose-400 animate-pulse" />
-          <span className="text-[11px] font-bold text-zinc-300">
-            लाइभ समय:
-          </span>
-          <span className="font-mono text-xs sm:text-sm font-black text-rose-300 tracking-wider">
-            {formatLiveDuration(totalLiveDurationSeconds)}
-          </span>
-          <span className="text-[10px] text-zinc-400 font-medium">
-            ({Math.floor(totalLiveDurationSeconds / 60)} मिनेट {totalLiveDurationSeconds % 60} सेकेन्ड)
-          </span>
-        </div>
-      </div>
-
-      {/* Live Started Host Celebration Alert Banner */}
-      {showLiveStartedBanner && isHost && (
-        <div className="relative z-30 mx-3 my-1 flex items-center justify-between rounded-2xl bg-gradient-to-r from-emerald-600 via-rose-600 to-pink-600 p-3 text-white shadow-2xl animate-fade-in border border-white/25">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/20 backdrop-blur-md shrink-0">
-              <Radio className="h-5 w-5 text-white animate-pulse" />
-            </div>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-white animate-ping" />
-                <h4 className="text-xs font-black">🎉 🔴 LIVE सफलतापूर्वक सुरु भयो!</h4>
-              </div>
-              <p className="text-[10px] sm:text-[11px] text-white/90 leading-tight mt-0.5">
-                तपाईं अहिले प्रत्यक्ष प्रसारणमा हुनुहुन्छ। दर्शकहरू आउन थालेका छन्!
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => setShowLiveStartedBanner(false)}
-            className="rounded-full bg-black/30 hover:bg-black/50 p-1.5 text-white transition-colors shrink-0 ml-2"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      )}
 
       {/* Live Reward & Moderation Safety Controller (Runs in background, alerts on violation) */}
       <LiveRewardAndSafetyController
@@ -1177,19 +1221,20 @@ export const LiveRoomView: React.FC<LiveRoomViewProps> = ({
         )}
       </div>
 
-      {/* Floating Live Chat Messages Container */}
+      {/* Floating Live Chat Messages Container (Only 2 most recent comments shown to keep screen clear) */}
       {isChatVisible && (
         <div
           ref={chatContainerRef}
-          className="relative z-20 mx-3 max-h-36 overflow-y-auto space-y-1.5 scroll-smooth pointer-events-auto pr-1"
-          style={{ maskImage: 'linear-gradient(to bottom, transparent 0%, black 15%)' }}
+          className="relative z-20 mx-3 max-h-24 overflow-hidden space-y-1.5 pointer-events-auto pr-1"
         >
-          {messages.map(msg => (
+          {messages.slice(-2).map(msg => (
             <div
               key={msg.id}
               className={`flex items-start gap-1.5 rounded-2xl px-3 py-1.5 text-xs backdrop-blur-md max-w-[85%] ${
                 msg.type === 'gift'
                   ? 'bg-gradient-to-r from-amber-500/25 to-rose-500/25 border border-amber-400/40 text-amber-200'
+                  : msg.type === 'join'
+                  ? 'bg-black/65 border border-emerald-500/35 text-emerald-300 font-semibold'
                   : msg.type === 'system' || msg.type === 'seat_action'
                   ? 'bg-zinc-900/80 border border-white/10 text-emerald-300 font-bold'
                   : 'bg-black/50 border border-white/5 text-white'
@@ -1251,43 +1296,52 @@ export const LiveRoomView: React.FC<LiveRoomViewProps> = ({
         {isHost ? (
           /* Host Dedicated Broadcast Suite */
           <div className="w-full flex items-center justify-between gap-1.5 sm:gap-2">
-            {/* Left Controls: Flip Camera & Filters */}
-            <div className="flex items-center gap-1.5">
+            {/* Left Controls: Flip Camera, Filters, Video On/Off, Mic, Soundboard, End Live */}
+            <div className="flex items-center gap-1 shrink-0">
               {room.type === 'video' && (
-                <button
-                  type="button"
-                  onClick={handleFlipCamera}
-                  className="flex items-center gap-1 rounded-full bg-zinc-800/90 border border-white/15 px-3 py-2 text-xs font-bold text-rose-400 hover:text-white transition-all active:scale-95"
-                  title="क्यामेरा बदल्नुहोस् (Flip Camera)"
-                >
-                  <RefreshCw className="h-4 w-4" />
-                  <span className="hidden sm:inline text-[11px]">क्यामेरा</span>
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={handleFlipCamera}
+                    className="flex items-center justify-center h-9 w-9 rounded-full bg-zinc-800/90 border border-white/15 text-rose-400 hover:text-white transition-all active:scale-95 shrink-0"
+                    title="क्यामेरा बदल्नुहोस् (Flip Camera)"
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsBeautyModalOpen(prev => !prev)}
+                    className={`flex items-center justify-center h-9 w-9 rounded-full border transition-all active:scale-95 shrink-0 ${
+                      isBeautyModalOpen
+                        ? 'bg-rose-600 text-white border-rose-400'
+                        : 'bg-zinc-800/90 text-pink-400 border-white/15 hover:text-white'
+                    }`}
+                    title="ब्युटी र फिल्टर (Beauty & Filters)"
+                  >
+                    <Sparkles className="h-4 w-4" />
+                  </button>
+
+                  {/* Camera on/off toggle */}
+                  <button
+                    type="button"
+                    onClick={() => setIsCameraOff(prev => !prev)}
+                    className={`flex items-center justify-center h-9 w-9 rounded-full border transition-all active:scale-95 shrink-0 ${
+                      isCameraOff
+                        ? 'bg-amber-600 text-white border-amber-400'
+                        : 'bg-zinc-800/90 text-zinc-300 border-white/15 hover:text-white'
+                    }`}
+                    title={isCameraOff ? 'क्यामेरा खोल्नुहोस् (Turn Camera On)' : 'क्यामेरा बन्द गर्नुहोस् (Turn Camera Off)'}
+                  >
+                    {isCameraOff ? <VideoOff className="h-4 w-4" /> : <Video className="h-4 w-4" />}
+                  </button>
+                </>
               )}
 
-              {room.type === 'video' && (
-                <button
-                  type="button"
-                  onClick={() => setIsBeautyModalOpen(prev => !prev)}
-                  className={`flex items-center gap-1 rounded-full border px-3 py-2 text-xs font-bold transition-all active:scale-95 ${
-                    isBeautyModalOpen
-                      ? 'bg-rose-600 text-white border-rose-400'
-                      : 'bg-zinc-800/90 text-pink-400 border-white/15 hover:text-white'
-                  }`}
-                  title="ब्युटी र फिल्टर (Beauty & Filters)"
-                >
-                  <Sparkles className="h-4 w-4" />
-                  <span className="hidden sm:inline text-[11px]">फिल्टर</span>
-                </button>
-              )}
-            </div>
-
-            {/* Middle Controls: Mic, Soundboard, Comment, Toggle Chat */}
-            <div className="flex items-center gap-1.5">
               <button
                 type="button"
                 onClick={() => setIsMicMuted(prev => !prev)}
-                className={`rounded-full p-2.5 transition-all active:scale-95 ${
+                className={`flex items-center justify-center h-9 w-9 rounded-full transition-all active:scale-95 shrink-0 ${
                   isMicMuted
                     ? 'bg-rose-600 text-white'
                     : 'bg-zinc-800/90 text-emerald-400 border border-emerald-500/40'
@@ -1300,48 +1354,91 @@ export const LiveRoomView: React.FC<LiveRoomViewProps> = ({
               <button
                 type="button"
                 onClick={() => setIsSoundboardOpen(prev => !prev)}
-                className="rounded-full bg-zinc-800/90 border border-white/10 p-2.5 text-amber-400 hover:text-amber-300 transition-colors active:scale-95"
+                className="flex items-center justify-center h-9 w-9 rounded-full bg-zinc-800/90 border border-white/10 text-amber-400 hover:text-amber-300 transition-colors active:scale-95 shrink-0"
                 title="साउन्ड इफेक्ट्स (Sound Effects)"
               >
                 <Music className="h-4 w-4" />
               </button>
 
-              <button
-                type="button"
-                onClick={() => setIsHostCommentInputOpen(prev => !prev)}
-                className={`rounded-full border p-2.5 transition-colors active:scale-95 ${
-                  isHostCommentInputOpen
-                    ? 'bg-blue-600 text-white border-blue-400'
-                    : 'bg-zinc-800/90 text-sky-400 border-white/15 hover:text-white'
-                }`}
-                title="कमेन्ट लेख्नुहोस् (Comment/Announce)"
-              >
-                <MessageSquare className="h-4 w-4" />
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setIsChatVisible(prev => !prev)}
-                className="rounded-full bg-zinc-800/90 border border-white/10 p-2.5 text-zinc-300 hover:text-white transition-colors active:scale-95"
-                title={isChatVisible ? 'च्याट लुकाउनुहोस् (Hide Chat)' : 'च्याट देखाउनुहोस् (Show Chat)'}
-              >
-                {isChatVisible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-              </button>
+              {/* Host Quick Pause / Person Absence Simulation Button (Face Live only) */}
+              {room.type === 'video' && (
+                <button
+                  type="button"
+                  id="host-simulate-absence-btn"
+                  onClick={() => {
+                    setIsPersonDetected(false);
+                    setAbsentSeconds(5);
+                  }}
+                  className="flex items-center justify-center h-9 w-9 rounded-full bg-zinc-800/90 border border-amber-400/40 text-amber-400 hover:bg-amber-500/20 transition-colors active:scale-95 shrink-0"
+                  title="मानिस नदेखिएको अवस्था परिक्षण गर्नुहोस् (Simulate Absence & Pause)"
+                >
+                  <UserX className="h-4 w-4" />
+                </button>
+              )}
             </div>
 
-            {/* Right: End Live Button with Cross Icon */}
-            <button
-              type="button"
-              id="bottom-bar-end-live-btn"
-              onClick={() => setShowExitConfirm(true)}
-              className="rounded-full bg-gradient-to-r from-red-600 via-rose-600 to-red-700 hover:from-red-500 hover:to-rose-500 px-4 py-2 text-xs font-black text-white shadow-xl shadow-red-950/60 active:scale-95 transition-all flex items-center gap-1.5 border border-red-400 cursor-pointer ring-2 ring-red-500/40"
-              title="लाइभ अन्त्य गर्नुहोस् (End Live ✕)"
-            >
-              <X className="h-4 w-4 text-white stroke-[3] shrink-0" />
-              <span className="font-black whitespace-nowrap">
-                {room.type === 'voice' ? '🔴 पार्टी अन्त्य ✕ (End Party)' : '🔴 लाइभ अन्त्य ✕ (End Live)'}
-              </span>
-            </button>
+            {/* Middle: Direct Comment Input Form for Host just like Party Live */}
+            <form onSubmit={handleSendMessage} className="flex-1 flex items-center gap-1.5 min-w-0 mx-1">
+              <input
+                type="text"
+                value={chatInput}
+                onChange={e => setChatInput(e.target.value)}
+                placeholder="कमेन्ट लेख्नुहोस् (Comment)..."
+                className="w-full rounded-full border border-white/15 bg-zinc-800/90 px-3 py-2 text-xs text-white placeholder-zinc-400 focus:border-rose-500 focus:outline-hidden"
+              />
+              <button
+                type="submit"
+                disabled={!chatInput.trim()}
+                className="rounded-full bg-rose-500 p-2 text-white disabled:opacity-40 disabled:pointer-events-none hover:bg-rose-600 transition-colors shrink-0"
+              >
+                <Send className="h-3.5 w-3.5" />
+              </button>
+            </form>
+
+            {/* Right: Dedicated Gift Box + Share Live (next to heart) + Tap Like Heart Button */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              {/* Dedicated Gift Box (Box मा Gift को Icon - opens categorized gifts & lucky gifts) */}
+              <button
+                type="button"
+                id="live-bottom-gift-box-btn"
+                onClick={() => {
+                  setGiftModalInitialCategory('all');
+                  setIsGiftModalOpen(true);
+                }}
+                className="relative flex items-center justify-center h-10 w-10 sm:h-11 sm:w-11 rounded-2xl bg-gradient-to-tr from-amber-500 via-rose-500 to-pink-500 p-[1.5px] shadow-[0_0_16px_rgba(244,63,94,0.45)] hover:scale-105 active:scale-95 transition-all shrink-0 cursor-pointer group"
+                title="उपहार तथा लक्की गिफ्ट पठाउनुहोस् (Send Gifts & Lucky Gifts)"
+              >
+                <div className="flex flex-col items-center justify-center w-full h-full rounded-[14px] bg-zinc-950/90 group-hover:bg-zinc-900/80 transition-colors">
+                  <span className="text-xl sm:text-2xl filter drop-shadow-md group-hover:scale-110 transition-transform">🎁</span>
+                  <span className="text-[7.5px] font-black text-amber-300 leading-none -mt-0.5 tracking-tighter uppercase">GIFT</span>
+                </div>
+                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-gradient-to-r from-amber-400 to-yellow-300 text-black text-[8px] font-black shadow-md ring-1 ring-black animate-pulse">
+                  🎰
+                </span>
+              </button>
+
+              {/* Share Live/Party Button (Right beside Heart button) */}
+              <button
+                type="button"
+                id="host-live-share-btn"
+                onClick={handleShareLive}
+                className="flex items-center justify-center h-9 w-9 sm:h-10 sm:w-10 rounded-full bg-zinc-800/90 border border-sky-400/40 text-sky-400 hover:text-white hover:bg-sky-500/20 active:scale-95 transition-all shrink-0 cursor-pointer shadow-md"
+                title="लाइभ/पार्टी सेयर गर्नुहोस् (Share Live / Party)"
+              >
+                <Share2 className="h-4 w-4" />
+              </button>
+
+              {/* Tap Like Heart Button */}
+              <button
+                type="button"
+                id="live-tap-like-heart-btn"
+                onClick={handleTapLike}
+                className="rounded-full bg-rose-600/90 p-2.5 text-white shadow-lg hover:bg-rose-600 active:scale-125 transition-transform cursor-pointer shrink-0"
+                title="लाइक पठाउनुहोस् (Send Hearts ❤️)"
+              >
+                <Heart className="h-4 w-4 fill-white" />
+              </button>
+            </div>
           </div>
         ) : (
           /* Viewer Interactive Suite */
@@ -1358,7 +1455,7 @@ export const LiveRoomView: React.FC<LiveRoomViewProps> = ({
               <button
                 type="submit"
                 disabled={!chatInput.trim()}
-                className="rounded-full bg-rose-500 p-2 text-white disabled:opacity-40 disabled:pointer-events-none hover:bg-rose-600 transition-colors"
+                className="rounded-full bg-rose-500 p-2 text-white disabled:opacity-40 disabled:pointer-events-none hover:bg-rose-600 transition-colors shrink-0"
               >
                 <Send className="h-3.5 w-3.5" />
               </button>
@@ -1369,7 +1466,7 @@ export const LiveRoomView: React.FC<LiveRoomViewProps> = ({
               <button
                 type="button"
                 onClick={() => handleToggleSeatMute(currentSeatIndex)}
-                className={`rounded-full p-2.5 transition-all active:scale-95 ${
+                className={`rounded-full p-2.5 transition-all active:scale-95 shrink-0 ${
                   isMicMuted
                     ? 'bg-rose-600 text-white'
                     : 'bg-zinc-800 text-emerald-400 border border-emerald-500/40'
@@ -1384,46 +1481,49 @@ export const LiveRoomView: React.FC<LiveRoomViewProps> = ({
             <button
               type="button"
               onClick={() => setIsSoundboardOpen(prev => !prev)}
-              className="rounded-full bg-zinc-800/90 border border-white/10 p-2.5 text-amber-400 hover:text-amber-300 transition-colors active:scale-95"
+              className="rounded-full bg-zinc-800/90 border border-white/10 p-2.5 text-amber-400 hover:text-amber-300 transition-colors active:scale-95 shrink-0"
               title="Sound Effects (मादल / हर्न / ताली)"
             >
               <Music className="h-4 w-4" />
             </button>
 
-            {/* Lucky Gift Button (🎰 लक्की ज्याकपट) */}
+            {/* Dedicated Gift Box on the Side */}
             <button
               type="button"
-              onClick={() => {
-                setGiftModalInitialCategory('lucky');
-                setIsGiftModalOpen(true);
-              }}
-              className="flex items-center gap-1.5 rounded-full bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 px-3 py-2 text-xs font-black text-black shadow-lg shadow-amber-500/25 hover:brightness-110 active:scale-95 transition-all shrink-0 border border-amber-300 ring-2 ring-amber-400/40 cursor-pointer"
-              title="Lucky Gift (लक्की ज्याकपट उपहार - 1000x सम्म जीत)"
-            >
-              <span className="text-sm">🎰</span>
-              <span className="font-extrabold tracking-tight">लक्की गिफ्ट</span>
-            </button>
-
-            {/* Standard Gift Button (🎁 उपहार) */}
-            <button
-              type="button"
+              id="live-bottom-gift-box-btn"
               onClick={() => {
                 setGiftModalInitialCategory('all');
                 setIsGiftModalOpen(true);
               }}
-              className="flex items-center gap-1.5 rounded-full bg-gradient-to-r from-rose-500 via-pink-500 to-rose-600 px-3 py-2 text-xs font-black text-white shadow-lg hover:from-rose-600 hover:to-pink-600 active:scale-95 transition-all shrink-0 border border-rose-400/40 cursor-pointer"
-              title="उपहार पठाउनुहोस् (Send Gift)"
+              className="relative flex items-center justify-center h-10 w-10 sm:h-11 sm:w-11 rounded-2xl bg-gradient-to-tr from-amber-500 via-rose-500 to-pink-500 p-[1.5px] shadow-[0_0_16px_rgba(244,63,94,0.45)] hover:scale-105 active:scale-95 transition-all shrink-0 cursor-pointer group"
+              title="उपहार तथा लक्की गिफ्ट पठाउनुहोस् (Send Gifts & Lucky Gifts)"
             >
-              <Gift className="h-3.5 w-3.5" />
-              <span>उपहार</span>
+              <div className="flex flex-col items-center justify-center w-full h-full rounded-[14px] bg-zinc-950/90 group-hover:bg-zinc-900/80 transition-colors">
+                <span className="text-xl sm:text-2xl filter drop-shadow-md group-hover:scale-110 transition-transform">🎁</span>
+                <span className="text-[7.5px] font-black text-amber-300 leading-none -mt-0.5 tracking-tighter uppercase">GIFT</span>
+              </div>
+              <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-gradient-to-r from-amber-400 to-yellow-300 text-black text-[8px] font-black shadow-md ring-1 ring-black animate-pulse">
+                🎰
+              </span>
+            </button>
+
+            {/* Share Live/Party Button (Right beside Heart button) */}
+            <button
+              type="button"
+              id="viewer-live-share-btn"
+              onClick={handleShareLive}
+              className="flex items-center justify-center h-9 w-9 sm:h-10 sm:w-10 rounded-full bg-zinc-800/90 border border-sky-400/40 text-sky-400 hover:text-white hover:bg-sky-500/20 active:scale-95 transition-all shrink-0 cursor-pointer shadow-md"
+              title="लाइभ/पार्टी सेयर गर्नुहोस् (Share Live / Party)"
+            >
+              <Share2 className="h-4 w-4" />
             </button>
 
             {/* Like Heart Button */}
             <button
               type="button"
               onClick={handleTapLike}
-              className="rounded-full bg-rose-600/90 p-2.5 text-white shadow-lg hover:bg-rose-600 active:scale-125 transition-transform cursor-pointer"
-              title="Send Hearts"
+              className="rounded-full bg-rose-600/90 p-2.5 text-white shadow-lg hover:bg-rose-600 active:scale-125 transition-transform cursor-pointer shrink-0"
+              title="लाइक पठाउनुहोस् (Send Hearts ❤️)"
             >
               <Heart className="h-4 w-4 fill-white" />
             </button>
@@ -1510,6 +1610,7 @@ export const LiveRoomView: React.FC<LiveRoomViewProps> = ({
         onClose={() => setIsGiftModalOpen(false)}
         seats={room.seats || []}
         hostName={room.host?.displayName || 'Host'}
+        hostAvatar={room.host?.avatarUrl}
         onSendGift={handleSendGift}
         initialCategory={giftModalInitialCategory}
         initialTargetSeat={giftModalTargetSeat}
@@ -1799,6 +1900,172 @@ export const LiveRoomView: React.FC<LiveRoomViewProps> = ({
               सम्पन्न गर्नुहोस् (Done & Return)
             </button>
           </div>
+        </div>
+      )}
+
+      {/* =========================================================================
+          AUTOMATIC PAUSE NOTICE MODAL (मान्छे नदेखिएपछि आउने Notice Modal)
+          - Face live बसेको समयमा मान्छे देखिएको छैन भने Live र Add दुवै रोकिनु पर्छ
+          - Live time पनि Count हुँदैन
+          - Automatic pause भएपछि Screen मा Notice दिइन्छ
+          - Notice को 'I see...' ट्याप गरेपछि Live र Ad पुनः सुरु हुन्छ
+          ========================================================================= */}
+      {room.type === 'video' && !isPersonDetected && !showLiveEndedSummary && (
+        <div
+          id="live-absence-pause-notice-modal"
+          className="fixed inset-0 z-[400] flex items-center justify-center bg-black/85 backdrop-blur-md p-4 select-none animate-fade-in"
+        >
+          <div className="relative w-full max-w-sm rounded-3xl border-2 border-rose-500 bg-zinc-950 p-6 text-center text-white shadow-[0_0_60px_rgba(244,63,94,0.4)] animate-scale-up">
+            {/* Warning / Pause Icon */}
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-rose-500/20 border-2 border-rose-500 text-rose-400 animate-pulse">
+              <UserX className="h-8 w-8 stroke-[2.5]" />
+            </div>
+
+            <div className="inline-flex items-center gap-1.5 rounded-full bg-rose-500/20 border border-rose-500/40 px-3 py-1 text-xs font-black text-rose-300 mb-2">
+              <span className="h-2 w-2 rounded-full bg-rose-500 animate-ping" />
+              <span>लाइभ स्वतः रोकियो (LIVE PAUSED)</span>
+            </div>
+
+            <h2 className="text-base font-black text-white mb-2">
+              क्यामेरा अगाडि मानिस देखिएन!
+            </h2>
+
+            <div className="rounded-2xl bg-zinc-900/90 border border-white/10 p-3.5 mb-5 text-left space-y-2">
+              <div className="flex items-center gap-2 text-xs font-bold text-amber-300">
+                <span>⏸️ लाइभ स्ट्रिम रोकिएको छ (Paused)</span>
+              </div>
+              <div className="flex items-center gap-2 text-xs font-bold text-amber-300">
+                <span>⏸️ प्रायोजक विज्ञापन रोकिएको छ (Ad Paused)</span>
+              </div>
+              <div className="flex items-center gap-2 text-xs font-bold text-amber-300">
+                <span>⏸️ लाइभ समय गणना रोकिएको छ (Time Paused)</span>
+              </div>
+              <p className="text-[11px] text-zinc-300 pt-1 border-t border-white/10 leading-relaxed">
+                क्यामेरा अगाडि कोही नदेखिएकाले प्रसारण र विज्ञापन स्वतः रोकिएका छन्। क्यामेरा अगाडि आएर तलको <strong>'I see...'</strong> बटन थिच्नुहोस्।
+              </p>
+            </div>
+
+            {/* "I see..." Button explicitly requested by user */}
+            <button
+              type="button"
+              id="live-resume-i-see-btn"
+              onClick={() => {
+                setIsPersonDetected(true);
+                setAbsentSeconds(0);
+                try {
+                  liveAudio.playSoundboard('cheer');
+                } catch {}
+              }}
+              className="w-full flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 py-3.5 text-base font-black text-white shadow-xl hover:brightness-110 active:scale-95 transition-all cursor-pointer ring-2 ring-emerald-400/50"
+            >
+              <UserCheck className="h-5 w-5" />
+              <span>I see... (म बुझ्छु, सुरु गर्नुहोस्)</span>
+            </button>
+
+            <p className="mt-3 text-[10px] text-zinc-400">
+              ट्याप गरेपछि फेस लाइभ, प्रायोजक विज्ञापन र समय गणना पुनः सुरु हुनेछ।
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Live Share Modal / Popover */}
+      {isShareModalOpen && (
+        <div
+          id="live-share-modal-overlay"
+          className="fixed inset-0 z-[450] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-xs p-3 animate-fade-in"
+          onClick={() => setIsShareModalOpen(false)}
+        >
+          <div
+            className="w-full max-w-sm rounded-3xl border border-white/15 bg-zinc-950 p-5 text-white shadow-2xl animate-slide-up"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-white/10 mb-3">
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-sky-500/20 text-sky-400">
+                  <Share2 className="h-4 w-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-white">लाइभ सेयर गर्नुहोस्</h3>
+                  <p className="text-[10px] text-zinc-400">साथीहरूसँग प्रत्यक्ष प्रसारण सेयर गर्नुहोस्</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsShareModalOpen(false)}
+                className="rounded-full bg-zinc-800/80 p-1.5 text-zinc-400 hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2 rounded-2xl bg-zinc-900 border border-white/10 p-2.5 mb-4">
+              <input
+                type="text"
+                readOnly
+                value={typeof window !== 'undefined' ? window.location.href : ''}
+                className="w-full bg-transparent text-xs text-zinc-300 font-mono focus:outline-hidden truncate"
+              />
+              <button
+                type="button"
+                onClick={handleCopyLiveLink}
+                className="flex items-center gap-1 rounded-xl bg-rose-500 hover:bg-rose-600 px-3 py-1.5 text-xs font-bold text-white transition-all active:scale-95 shrink-0"
+              >
+                <Copy className="h-3.5 w-3.5" />
+                <span>कपी (Copy)</span>
+              </button>
+            </div>
+
+            {/* Quick social share buttons */}
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const url = encodeURIComponent(window.location.href);
+                  const text = encodeURIComponent(`${room.host?.displayName || 'नेपाली क्रिएटर'} को लाइभ हेर्नुहोस्! 🔴`);
+                  window.open(`https://wa.me/?text=${text}%20${url}`, '_blank');
+                  setIsShareModalOpen(false);
+                }}
+                className="flex flex-col items-center justify-center gap-1 rounded-2xl bg-emerald-600/20 border border-emerald-500/30 p-2.5 text-emerald-400 hover:bg-emerald-600/30 transition-all active:scale-95"
+              >
+                <span className="text-xl">💬</span>
+                <span className="text-[10px] font-bold">WhatsApp</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const url = encodeURIComponent(window.location.href);
+                  window.open(`https://www.facebook.com/sharer/sharer.php?u=${url}`, '_blank');
+                  setIsShareModalOpen(false);
+                }}
+                className="flex flex-col items-center justify-center gap-1 rounded-2xl bg-blue-600/20 border border-blue-500/30 p-2.5 text-blue-400 hover:bg-blue-600/30 transition-all active:scale-95"
+              >
+                <span className="text-xl">👥</span>
+                <span className="text-[10px] font-bold">Facebook</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  handleCopyLiveLink();
+                  setIsShareModalOpen(false);
+                }}
+                className="flex flex-col items-center justify-center gap-1 rounded-2xl bg-rose-600/20 border border-rose-500/30 p-2.5 text-rose-400 hover:bg-rose-600/30 transition-all active:scale-95"
+              >
+                <span className="text-xl">🔗</span>
+                <span className="text-[10px] font-bold">लिङ्क कपी</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Share Success Toast Notification */}
+      {shareSuccessToast && (
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-[500] flex items-center gap-2 rounded-full bg-emerald-500 px-4 py-2 text-xs font-black text-black shadow-2xl animate-bounce">
+          <CheckCircle2 className="h-4 w-4" />
+          <span>{shareSuccessToast}</span>
         </div>
       )}
 

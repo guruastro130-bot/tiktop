@@ -4,7 +4,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { NotificationProvider } from './context/NotificationContext';
 import { AdProvider, useAds } from './context/AdContext';
 import { Video, User, LiveRoom } from './types';
-import { INITIAL_VIDEOS, INITIAL_USERS } from './data/initialData';
+import { INITIAL_VIDEOS, INITIAL_USERS, getRandomBannerAd } from './data/initialData';
 import { INITIAL_LIVE_ROOMS } from './data/liveData';
 import { FeedView } from './components/FeedView';
 import { DiscoverView } from './components/DiscoverView';
@@ -265,12 +265,21 @@ const AppContent: React.FC = () => {
   // User triggers Start Live -> Pop up the 3/2/1 countdown modal first
   const handleRequestStartLive = (newRoom: LiveRoom) => {
     setIsGoLiveOpen(false);
-    setPendingLiveRoom({ ...newRoom, isUserHost: true });
+    const roomWithBanner: LiveRoom = {
+      ...newRoom,
+      bannerAd: newRoom.bannerAd || getRandomBannerAd(),
+      isUserHost: true,
+    };
+    setPendingLiveRoom(roomWithBanner);
   };
 
   // When 3/2/1 countdown finishes and fanfare plays -> Officially start live room!
   const handleConfirmStartLive = (newRoom: LiveRoom) => {
-    const hostedRoom: LiveRoom = { ...newRoom, isUserHost: true };
+    const hostedRoom: LiveRoom = {
+      ...newRoom,
+      bannerAd: newRoom.bannerAd || getRandomBannerAd(),
+      isUserHost: true,
+    };
     setLiveRooms(prev => [hostedRoom, ...prev]);
     setActiveLiveRoom(hostedRoom);
     setPendingLiveRoom(null);
@@ -327,13 +336,17 @@ const AppContent: React.FC = () => {
           isLocked: false,
         }))
       ] : [],
+      bannerAd: getRandomBannerAd(),
       isMicMuted: false,
       isCameraOff: false,
       isHostOnline: true,
       isUserHost: true,
       createdAt: new Date().toISOString(),
     };
-    handleRequestStartLive(newRoom);
+    // Direct instant start into the live room for guaranteed reliability
+    setLiveRooms(prev => [newRoom, ...prev]);
+    setActiveLiveRoom(newRoom);
+    setCurrentTab('live');
   };
 
   const handleCloseLiveRoom = () => {

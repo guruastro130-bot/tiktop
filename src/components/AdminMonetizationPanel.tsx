@@ -23,6 +23,7 @@ import {
   ShieldAlert
 } from 'lucide-react';
 import { PlatformMonetizationStats, PayoutRequest, RevenueEvent, AdSettings, User } from '../types';
+import { INITIAL_AD_SETTINGS } from '../data/initialData';
 
 interface AdminMonetizationPanelProps {
   users: User[];
@@ -36,16 +37,7 @@ export const AdminMonetizationPanel: React.FC<AdminMonetizationPanelProps> = ({
   const [stats, setStats] = useState<PlatformMonetizationStats | null>(null);
   const [payouts, setPayouts] = useState<PayoutRequest[]>([]);
   const [revenueEvents, setRevenueEvents] = useState<RevenueEvent[]>([]);
-  const [settings, setSettings] = useState<AdSettings>({
-    bannerCpm: 2.50,
-    bannerCpc: 0.15,
-    fullscreenCpm: 8.00,
-    fullscreenCpc: 0.45,
-    creatorRevenueSharePercent: 55,
-    platformRevenueSharePercent: 45,
-    minPayoutThreshold: 20.00,
-    enableMonetization: true,
-  });
+  const [settings, setSettings] = useState<AdSettings>(INITIAL_AD_SETTINGS);
 
   const [loading, setLoading] = useState<boolean>(true);
   const [savingSettings, setSavingSettings] = useState<boolean>(false);

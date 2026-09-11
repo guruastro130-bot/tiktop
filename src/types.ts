@@ -75,6 +75,7 @@ export interface WithdrawalRequest {
   localServiceCharge?: number;
   localNetPayout?: number;
   accountHolderName?: string;
+  accountNumber?: string;
   walletIdentifier?: string; // UPI ID / Phone / eSewa / GCash / Easypaisa / USDT
   timestamp?: string; // e.g. '2026-06-05T12:00:00Z'
   requestedAt: string;
@@ -240,6 +241,8 @@ export interface AdSettings {
   fullscreenCpc: number; // e.g. 0.50 ($0.50 per click)
   creatorSharePercent: number; // e.g. 55%
   platformSharePercent: number; // e.g. 45%
+  creatorRevenueSharePercent?: number; // alias
+  platformRevenueSharePercent?: number; // alias
   minPayoutThreshold: number; // e.g. 20.00 USD
   enableMonetization: boolean; // toggle monetization system
   // Admin Guard & Instant Telegram Alerts
@@ -259,6 +262,7 @@ export interface SecurityIncidentRecord {
   videoId?: string;
   actionTaken: 'claim_rejected' | 'cooldown_applied' | 'warning_logged' | 'account_flagged';
   details: string;
+  reason?: string;
   watchTimeSeconds?: number;
   burstCount?: number;
   ipAddress?: string;
@@ -274,11 +278,13 @@ export interface AntiCheatStats {
   activeCooldownsCount: number;
   averageGenuineWatchTimeSec: number;
   incidents: SecurityIncidentRecord[];
+  recentIncidents?: SecurityIncidentRecord[];
 }
 
 export interface RevenueEvent {
   id: string;
   creatorId: string;
+  creatorUsername?: string;
   videoId?: string;
   videoCaption?: string;
   adId: string;
@@ -356,6 +362,12 @@ export interface PlatformMonetizationStats {
   totalValidFullscreenClicks: number;
   totalBlockedFraudEvents: number;
   averageRpm: number;
+  totalValidImpressions?: number;
+  totalValidClicks?: number;
+  availableCreatorBalanceTotal?: number;
+  pendingPayoutsAmount?: number;
+  totalPayoutsDisbursed?: number;
+  blockedFraudEventsCount?: number;
 }
 
 export interface CopyrightClaimData {
@@ -389,6 +401,7 @@ export interface CopyrightViolationRecord {
   actionTaken: 'video_removed' | 'strike_issued' | 'creator_banned' | 'warning_issued';
   adminId: string;
   adminUsername: string;
+  timestamp?: string;
   createdAt: string;
 }
 
@@ -402,6 +415,8 @@ export interface AuditLogEntry {
   targetPreview?: string;
   reason: string;
   details?: string;
+  notes?: string;
+  timestamp?: string;
   createdAt: string;
 }
 
@@ -417,6 +432,7 @@ export interface Report {
   status: 'pending' | 'under_review' | 'resolved' | 'dismissed';
   createdAt: string;
   updatedAt?: string;
+  reviewedAt?: string;
   // Copyright details (Accessible by authorized admins only)
   copyrightData?: CopyrightClaimData;
   reviewedBy?: string;
@@ -490,6 +506,7 @@ export interface AdminStats {
   totalCopyrightStrikes: number;
   totalAuditLogs: number;
   monetizationStats?: PlatformMonetizationStats;
+  monetization?: PlatformMonetizationStats;
 }
 
 // ==========================================

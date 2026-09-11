@@ -22,6 +22,10 @@ export const LiveStartCountdownPopup: React.FC<LiveStartCountdownPopupProps> = (
   const videoPreviewRef = useRef<HTMLVideoElement>(null);
   const timersRef = useRef<NodeJS.Timeout[]>([]);
   const isCompletedRef = useRef<boolean>(false);
+  const onCompleteRef = useRef(onComplete);
+  onCompleteRef.current = onComplete;
+  const roomRef = useRef(room);
+  roomRef.current = room;
 
   const clearAllTimers = () => {
     timersRef.current.forEach(t => clearTimeout(t));
@@ -29,13 +33,14 @@ export const LiveStartCountdownPopup: React.FC<LiveStartCountdownPopupProps> = (
   };
 
   const handleInstantLaunch = () => {
-    if (!room || isCompletedRef.current) return;
+    const targetRoom = roomRef.current || room;
+    if (!targetRoom || isCompletedRef.current) return;
     isCompletedRef.current = true;
     clearAllTimers();
     try {
       liveAudio.playLiveStartFanfare();
     } catch {}
-    onComplete(room);
+    onCompleteRef.current(targetRoom);
   };
 
   // Bind local media stream to preview video element if available
@@ -69,27 +74,27 @@ export const LiveStartCountdownPopup: React.FC<LiveStartCountdownPopupProps> = (
       if (typeof navigator !== 'undefined' && 'vibrate' in navigator) navigator.vibrate(80);
     } catch {}
 
-    // Step 2: Transition to 2 after 1000ms
+    // Step 2: Transition to 2 after 700ms
     const t2 = setTimeout(() => {
       setCount(2);
       try {
         liveAudio.playCountdownTick(2);
         if (typeof navigator !== 'undefined' && 'vibrate' in navigator) navigator.vibrate(80);
       } catch {}
-    }, 1000);
+    }, 700);
     timersRef.current.push(t2);
 
-    // Step 3: Transition to 1 after 2000ms
+    // Step 3: Transition to 1 after 1400ms
     const t1 = setTimeout(() => {
       setCount(1);
       try {
         liveAudio.playCountdownTick(1);
         if (typeof navigator !== 'undefined' && 'vibrate' in navigator) navigator.vibrate(90);
       } catch {}
-    }, 2000);
+    }, 1400);
     timersRef.current.push(t1);
 
-    // Step 4: Transition to 0 (LIVE NOW) after 3000ms
+    // Step 4: Transition to 0 (LIVE NOW) after 2100ms
     const t0 = setTimeout(() => {
       setCount(0);
       setIsLiveActive(true);
@@ -111,17 +116,20 @@ export const LiveStartCountdownPopup: React.FC<LiveStartCountdownPopupProps> = (
       const tFinish = setTimeout(() => {
         if (!isCompletedRef.current) {
           isCompletedRef.current = true;
-          onComplete(room);
+          const target = roomRef.current || room;
+          if (target) {
+            onCompleteRef.current(target);
+          }
         }
-      }, 700);
+      }, 500);
       timersRef.current.push(tFinish);
-    }, 3000);
+    }, 2100);
     timersRef.current.push(t0);
 
     return () => {
       clearAllTimers();
     };
-  }, [isOpen, room, onComplete]);
+  }, [isOpen, room?.id]);
 
   if (!isOpen || !room) return null;
 

@@ -43,6 +43,7 @@ import {
   KeyRound
 } from 'lucide-react';
 import { AdminStats, Ad, User, Video, Report, AdSettings } from '../types';
+import { INITIAL_AD_SETTINGS } from '../data/initialData';
 import { useAds } from '../context/AdContext';
 import { useAuth } from '../context/AuthContext';
 import { AdminCopyrightReports } from './AdminCopyrightReports';
@@ -91,19 +92,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
   const [users, setUsers] = useState<User[]>([]);
   const [videos, setVideos] = useState<Video[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
-  const [adSettings, setAdSettings] = useState<AdSettings>({
-    fullscreenAdInterval: 10,
-    validViewThresholdSeconds: 2.5,
-    minAdVisibilitySeconds: 1.0,
-    bannerAdsEnabled: true,
-    fullscreenAdsEnabled: true,
-    bannerRefreshSeconds: 20,
-    enableAds: true,
-    adminPassword: 'TikTopAdmin@2026',
-    telegramBotToken: '',
-    telegramChatId: '',
-    telegramAlertsEnabled: true,
-  });
+  const [adSettings, setAdSettings] = useState<AdSettings>(INITIAL_AD_SETTINGS);
 
   const [loading, setLoading] = useState<boolean>(true);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string>('');

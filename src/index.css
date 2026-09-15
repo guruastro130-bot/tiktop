@@ -71,3 +71,65 @@
 .animate-ping-once {
   animation: pingOnce 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
 }
+
+@keyframes rumble {
+  0% { transform: translate(0, 0) rotate(0deg); }
+  20% { transform: translate(-3px, 3px) rotate(-0.5deg); }
+  40% { transform: translate(3px, -2px) rotate(0.5deg); }
+  60% { transform: translate(-2px, 1px) rotate(-0.3deg); }
+  80% { transform: translate(2px, -1px) rotate(0.3deg); }
+  100% { transform: translate(0, 0) rotate(0deg); }
+}
+
+.animate-rumble {
+  animation: rumble 0.5s ease-in-out infinite;
+}
+
+@keyframes floatDownRain {
+  0% {
+    transform: translateY(-80px) rotate(-10deg) scale(0.85);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+    transform: translateY(20px) rotate(5deg) scale(1);
+  }
+  85% {
+    opacity: 1;
+    transform: translateY(420px) rotate(-8deg) scale(1);
+  }
+  100% {
+    transform: translateY(520px) rotate(12deg) scale(0.7);
+    opacity: 0;
+  }
+}
+
+.animate-float-down {
+  animation: floatDownRain linear forwards;
+}
+
+@keyframes floatUpFade {
+  0% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-50px) scale(1.2);
+  }
+}
+
+.animate-float-up-fade {
+  animation: floatUpFade 1.2s ease-out forwards;
+}
+
+@keyframes rotateGodRay {
+  0% { transform: rotate(0deg) scale(1); }
+  50% { transform: rotate(180deg) scale(1.05); }
+  100% { transform: rotate(360deg) scale(1); }
+}
+
+.animate-god-ray {
+  animation: rotateGodRay 18s linear infinite;
+}
+

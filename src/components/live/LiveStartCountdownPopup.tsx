@@ -184,25 +184,25 @@ export const LiveStartCountdownPopup: React.FC<LiveStartCountdownPopupProps> = (
           {/* Center container */}
           <div className="relative flex h-44 w-44 items-center justify-center overflow-hidden rounded-full border-4 border-white/80 bg-zinc-900 shadow-[0_0_50px_rgba(244,63,94,0.8)]">
             
-            {/* Live Camera preview or Host Avatar in background */}
+            {/* Live Camera preview or Host Avatar in background - High clarity */}
             {room.type === 'video' && room.localMediaStream ? (
               <video
                 ref={videoPreviewRef}
                 autoPlay
                 playsInline
                 muted
-                className="absolute inset-0 h-full w-full object-cover -scale-x-100 opacity-40 filter brightness-90"
+                className="absolute inset-0 h-full w-full object-cover -scale-x-100 opacity-90 filter brightness-105"
               />
             ) : (
               <img
                 src={room.host.avatarUrl}
                 alt={room.host.displayName}
-                className="absolute inset-0 h-full w-full object-cover opacity-35 filter blur-xs"
+                className="absolute inset-0 h-full w-full object-cover opacity-90 filter brightness-105"
               />
             )}
 
-            {/* Dark tint overlay for text legibility */}
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px]" />
+            {/* Subtle radial tint overlay for text legibility without obscuring the face */}
+            <div className="absolute inset-0 bg-black/35" />
 
             {/* Dynamic Countdown Number (3, 2, 1) or LIVE Icon (0) */}
             <div className="relative z-10 flex flex-col items-center justify-center">

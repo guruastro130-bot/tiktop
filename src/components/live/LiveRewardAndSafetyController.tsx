@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { liveAudio } from '../../utils/liveAudio';
+import { getDailyLiveRecord } from '../../utils/dailyLiveTracker';
 
 interface LiveRewardAndSafetyControllerProps {
   isHost: boolean;
@@ -43,9 +44,22 @@ export const LiveRewardAndSafetyController: React.FC<LiveRewardAndSafetyControll
 }) => {
   const { currentUser, claimLiveReward, banUserLive, banUserAccount, resetUserBans } = useAuth();
 
-  const [claimedMilestone1, setClaimedMilestone1] = useState<boolean>(false);
-  const [claimedMilestone2, setClaimedMilestone2] = useState<boolean>(false);
+  const [claimedMilestone1, setClaimedMilestone1] = useState<boolean>(() => {
+    const record = getDailyLiveRecord(currentUser?.id || 'guest_creator');
+    return record.claimedMilestone1;
+  });
+  const [claimedMilestone2, setClaimedMilestone2] = useState<boolean>(() => {
+    const record = getDailyLiveRecord(currentUser?.id || 'guest_creator');
+    return record.claimedMilestone2;
+  });
   const [isClaiming, setIsClaiming] = useState<boolean>(false);
+
+  // Sync claimed states if user or date changes (e.g. 12:00 AM reset)
+  useEffect(() => {
+    const record = getDailyLiveRecord(currentUser?.id || 'guest_creator');
+    setClaimedMilestone1(record.claimedMilestone1);
+    setClaimedMilestone2(record.claimedMilestone2);
+  }, [currentUser?.id, liveSeconds === 0]);
 
   // Warning and Penalty States
   const [showWarningModal, setShowWarningModal] = useState<boolean>(false);

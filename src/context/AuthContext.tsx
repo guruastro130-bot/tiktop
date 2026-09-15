@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User } from '../types';
 import { INITIAL_USERS } from '../data/initialData';
+import { getTodayDateKey, isEligibleForLiveReward, markDailyMilestoneClaimed } from '../utils/dailyLiveTracker';
 
 interface AuthContextType {
   currentUser: User | null;
@@ -33,17 +34,23 @@ const LOCAL_STORAGE_CUSTOM_USERS_KEY = 'tiktok_custom_users';
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
-    const saved = localStorage.getItem(LOCAL_STORAGE_USER_KEY);
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (parsed && parsed.coinBalance === undefined) {
-          parsed.coinBalance = 5000;
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const saved = localStorage.getItem(LOCAL_STORAGE_USER_KEY);
+        if (saved) {
+          try {
+            const parsed = JSON.parse(saved);
+            if (parsed && parsed.coinBalance === undefined) {
+              parsed.coinBalance = 5000;
+            }
+            return parsed;
+          } catch {
+            return null;
+          }
         }
-        return parsed;
-      } catch {
-        return null;
       }
+    } catch {
+      // Storage unavailable / restricted
     }
     // Default to admin user for rich initial access
     const defaultUser = INITIAL_USERS[0];
@@ -56,10 +63,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
   useEffect(() => {
-    if (currentUser) {
-      localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(currentUser));
-    } else {
-      localStorage.removeItem(LOCAL_STORAGE_USER_KEY);
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        if (currentUser) {
+          localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(currentUser));
+        } else {
+          localStorage.removeItem(LOCAL_STORAGE_USER_KEY);
+        }
+      }
+    } catch {
+      // Ignore storage write error
     }
   }, [currentUser]);
 
@@ -458,8 +471,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!currentUser) {
       return { success: false, error: 'Authentication required' };
     }
+
+    // Client-side 12:00 AM reset and duration eligibility check
+    const eligibility = isEligibleForLiveReward(currentUser.id, milestone, liveDurationSeconds);
+    if (!eligibility.eligible) {
+      return { success: false, error: eligibility.reason || 'अयोग्य' };
+    }
+
     const pointsAwarded = 1000;
     const fallbackNewTotal = (currentUser.points || 0) + pointsAwarded;
+    const dateKey = getTodayDateKey();
+
     try {
       const res = await fetch('/api/rewards/claim-live-stream', {
         method: 'POST',
@@ -470,11 +492,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         body: JSON.stringify({
           milestone,
           liveDurationSeconds,
+          dateKey,
         })
       });
       if (res.ok) {
         const data = await res.json();
         updateUserPoints(data.newTotalPoints);
+        markDailyMilestoneClaimed(currentUser.id, milestone);
         return {
           success: true,
           pointsAwarded: data.pointsAwarded,
@@ -488,6 +512,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // client fallback
     }
     updateUserPoints(fallbackNewTotal);
+    markDailyMilestoneClaimed(currentUser.id, milestone);
     return {
       success: true,
       pointsAwarded,

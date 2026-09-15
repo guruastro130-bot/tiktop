@@ -1,7 +1,19 @@
 import { getApp } from '../server';
 
-const app = getApp();
+let cachedApp: any = null;
 
 export default function handler(req: any, res: any) {
-  return app(req, res);
+  try {
+    if (!cachedApp) {
+      cachedApp = getApp();
+    }
+    return cachedApp(req, res);
+  } catch (err: any) {
+    console.error('[Vercel Serverless API Error]:', err);
+    return res.status(500).json({
+      error: 'Internal Server Error',
+      message: err?.message || 'Server handler failed',
+    });
+  }
 }
+

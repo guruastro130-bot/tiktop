@@ -488,10 +488,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
   return (
     <div className="h-full w-full bg-zinc-950 text-white overflow-y-auto pb-24 relative">
-      <div className="max-w-xl mx-auto px-4 py-6">
+      <div className="max-w-xl mx-auto px-4 py-4">
         
-        {/* Top Actions Bar */}
-        <div className="flex items-center justify-between mb-4">
+        {/* Top Header Bar */}
+        <div className="relative flex items-center justify-between py-2 border-b border-white/5">
           <div className="flex items-center gap-2">
             {onBack && !isOwnProfile && (
               <button
@@ -503,28 +503,34 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 <ArrowLeft className="h-4 w-4" />
               </button>
             )}
-            <div className="flex items-center gap-1.5">
-              <span className="text-sm font-bold truncate">@{profileUser.username}</span>
-              {profileUser.isVerified && (
-                <span className="rounded-full bg-sky-500 px-1 py-0.2 text-[9px] text-white">✓</span>
-              )}
-              {profileUser.role === 'admin' && (
-                <span className="rounded-full bg-amber-500/20 border border-amber-400/30 px-1.5 py-0.2 text-[9px] font-bold text-amber-300">
-                  Admin
-                </span>
-              )}
-            </div>
           </div>
 
-          <div className="flex items-center gap-2 relative">
+          {/* Centered Username */}
+          <div className="flex items-center gap-1.5 absolute left-1/2 -translate-x-1/2">
+            <span className="text-sm font-bold text-white truncate max-w-[180px] sm:max-w-xs">
+              @{profileUser.username}
+            </span>
+            {profileUser.isVerified && (
+              <span className="rounded-full bg-sky-500 px-1 py-0.2 text-[9px] font-bold text-white">✓</span>
+            )}
+            {profileUser.role === 'admin' && (
+              <span className="rounded-full bg-amber-500/20 border border-amber-400/30 px-1.5 py-0.2 text-[9px] font-bold text-amber-300">
+                Admin
+              </span>
+            )}
+          </div>
+
+          {/* Right Action Icons */}
+          <div className="flex items-center gap-1 relative">
             {isOwnProfile && isAdmin && onOpenAdmin && (
               <button
                 type="button"
                 onClick={onOpenAdmin}
-                className="flex items-center gap-1 rounded-xl bg-amber-500/15 border border-amber-500/30 px-2.5 py-1 text-xs font-bold text-amber-300 hover:bg-amber-500/25"
+                className="flex items-center gap-1 rounded-lg bg-zinc-800 border border-white/10 px-2 py-1 text-xs font-semibold text-amber-300 hover:bg-zinc-700 transition-colors"
+                title="Admin Panel"
               >
                 <ShieldCheck className="h-3.5 w-3.5" />
-                <span>Admin</span>
+                <span className="hidden sm:inline">Admin</span>
               </button>
             )}
 
@@ -533,11 +539,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               <button
                 type="button"
                 onClick={() => setIsPrivacyModalOpen(true)}
-                className="flex items-center gap-1 rounded-xl bg-zinc-900 border border-white/10 px-2.5 py-1.5 text-xs font-medium text-zinc-300 hover:bg-zinc-800 hover:text-white transition-colors"
+                className="rounded-full p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-white transition-colors"
                 title="Privacy & Blocked Users"
               >
-                <Shield className="h-3.5 w-3.5 text-rose-400" />
-                <span className="hidden sm:inline">Privacy</span>
+                <Shield className="h-4 w-4 text-zinc-300" />
               </button>
             )}
 
@@ -604,7 +609,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               <button
                 type="button"
                 onClick={logout}
-                className="rounded-full p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-white"
+                className="rounded-full p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-white transition-colors"
                 title="Log out"
               >
                 <LogOut className="h-4 w-4" />
@@ -613,53 +618,75 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           </div>
         </div>
 
-        {/* Profile Card Header */}
-        <div className="flex flex-col items-center text-center space-y-3">
+        {/* Profile Details Header (TikTok Compact Spacing) */}
+        <div className="flex flex-col items-center text-center pt-3 pb-2">
+          {/* Avatar Container */}
           <div className="relative group">
             <img
               src={profileUser.avatarUrl}
               alt={profileUser.username}
-              className="h-24 w-24 rounded-full object-cover border-2 border-rose-500 shadow-xl bg-zinc-900"
+              className="h-20 w-20 sm:h-22 sm:w-22 rounded-full object-cover ring-2 ring-white/10 shadow-lg bg-zinc-900"
             />
             {isOwnProfile && (
               <button
                 type="button"
                 onClick={() => setIsAvatarPickerOpen(true)}
-                className="absolute bottom-0 right-0 rounded-full bg-rose-500 p-1.5 text-white shadow-lg hover:bg-rose-600 transition-transform active:scale-95 group-hover:scale-110"
+                className="absolute bottom-0 right-0 rounded-full bg-zinc-800 hover:bg-zinc-700 border border-zinc-950 p-1.5 text-white shadow-md transition-transform active:scale-95 cursor-pointer"
                 title="Change profile picture"
               >
-                <Camera className="h-3.5 w-3.5" />
+                <Camera className="h-3 w-3 text-zinc-200" />
               </button>
             )}
             {isBlocked && (
               <div className="absolute inset-0 rounded-full bg-black/60 flex items-center justify-center backdrop-blur-xs">
-                <UserX className="h-8 w-8 text-rose-500" />
+                <UserX className="h-7 w-7 text-rose-500" />
               </div>
             )}
           </div>
 
-          <div>
-            <h1 className="text-lg font-black text-white">{profileUser.displayName}</h1>
-            <p className="text-xs text-zinc-400 mt-0.5">@{profileUser.username}</p>
-            
+          {/* Names & Badges */}
+          <div className="mt-2.5 flex flex-col items-center">
+            <h1 className="text-[17px] sm:text-lg font-bold text-white tracking-tight leading-snug">
+              {profileUser.displayName}
+            </h1>
+            <p className="text-xs text-zinc-400 font-normal mt-0.5">
+              @{profileUser.username}
+            </p>
+
+            {/* TikTop Creator Sleek Badge under Name (Replacing Clunky Button) */}
+            {isOwnProfile && (
+              <button
+                type="button"
+                id="profile-tiktop-badge-btn"
+                onClick={() => setIsTikTopDashboardOpen(true)}
+                className="mt-1.5 inline-flex items-center gap-1.5 rounded-full bg-zinc-900/90 hover:bg-zinc-800 border border-white/10 px-2.5 py-0.5 text-[11px] font-medium text-zinc-300 hover:text-white transition-all cursor-pointer shadow-xs active:scale-95"
+                title="TikTop Live, Gifts & Withdraw Dashboard"
+              >
+                <span className="text-[10px]">🚀</span>
+                <span>TikTop Creator</span>
+              </button>
+            )}
+
             {/* Status Badges */}
-            <div className="flex items-center justify-center gap-2 mt-1.5">
-              {isBlocked && (
-                <span className="rounded-full bg-rose-500/20 border border-rose-500/30 px-2 py-0.5 text-[10px] font-bold text-rose-400 flex items-center gap-1">
-                  <UserX className="h-3 w-3" />
-                  Blocked
-                </span>
-              )}
-              {isMuted && (
-                <span className="rounded-full bg-amber-500/20 border border-amber-500/30 px-2 py-0.5 text-[10px] font-bold text-amber-400 flex items-center gap-1">
-                  <VolumeX className="h-3 w-3" />
-                  Muted
-                </span>
-              )}
-            </div>
+            {(isBlocked || isMuted) && (
+              <div className="flex items-center justify-center gap-2 mt-1.5">
+                {isBlocked && (
+                  <span className="rounded-full bg-rose-500/20 border border-rose-500/30 px-2 py-0.5 text-[10px] font-semibold text-rose-400 flex items-center gap-1">
+                    <UserX className="h-3 w-3" />
+                    Blocked
+                  </span>
+                )}
+                {isMuted && (
+                  <span className="rounded-full bg-amber-500/20 border border-amber-500/30 px-2 py-0.5 text-[10px] font-semibold text-amber-400 flex items-center gap-1">
+                    <VolumeX className="h-3 w-3" />
+                    Muted
+                  </span>
+                )}
+              </div>
+            )}
           </div>
 
-          {/* If the current user has blocked this creator */}
+          {/* Blocked Views */}
           {isBlocked ? (
             <div className="w-full max-w-sm rounded-2xl border border-rose-500/20 bg-rose-500/10 p-4 text-center my-4 space-y-3">
               <ShieldAlert className="h-8 w-8 text-rose-400 mx-auto" />
@@ -673,13 +700,12 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 type="button"
                 onClick={handleToggleBlock}
                 disabled={actionLoading}
-                className="rounded-xl bg-rose-600 hover:bg-rose-500 px-5 py-2 text-xs font-bold text-white shadow transition-colors disabled:opacity-50"
+                className="rounded-xl bg-rose-600 hover:bg-rose-500 px-5 py-2 text-xs font-bold text-white shadow transition-colors disabled:opacity-50 cursor-pointer"
               >
                 {actionLoading ? 'Unblocking...' : 'Unblock Account'}
               </button>
             </div>
           ) : isBlockedByTarget ? (
-            /* If this creator has blocked the current user */
             <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-zinc-900 p-6 text-center my-4 space-y-2">
               <AlertCircle className="h-8 w-8 text-zinc-500 mx-auto" />
               <p className="text-xs font-bold text-zinc-300">Account Unavailable</p>
@@ -689,89 +715,75 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             </div>
           ) : (
             <>
-              {/* Counts Bar */}
-              <div className="flex items-center justify-center gap-6 py-2 border-y border-white/10 w-full max-w-sm">
-                <div className="text-center">
-                  <span className="text-sm font-bold text-white block">
+              {/* Counts Bar (TikTok Clean Optical Metrics) */}
+              <div className="flex items-center justify-center gap-7 sm:gap-9 py-2.5 my-1.5 w-full max-w-xs">
+                <div className="text-center cursor-pointer">
+                  <span className="text-base font-bold text-white block tracking-tight">
                     {formatCount(profileUser.followingCount)}
                   </span>
-                  <span className="text-[10px] text-zinc-400 uppercase tracking-wider">Following</span>
+                  <span className="text-[11px] text-zinc-400 font-normal">Following</span>
                 </div>
 
-                <div className="h-6 w-px bg-white/10" />
-
-                <div className="text-center">
-                  <span className="text-sm font-bold text-white block">
+                <div className="text-center cursor-pointer">
+                  <span className="text-base font-bold text-white block tracking-tight">
                     {formatCount(profileUser.followersCount)}
                   </span>
-                  <span className="text-[10px] text-zinc-400 uppercase tracking-wider">Followers</span>
+                  <span className="text-[11px] text-zinc-400 font-normal">Followers</span>
                 </div>
 
-                <div className="h-6 w-px bg-white/10" />
-
                 <div className="text-center">
-                  <span className="text-sm font-bold text-white block">
+                  <span className="text-base font-bold text-white block tracking-tight">
                     {formatCount(profileUser.likesReceivedCount)}
                   </span>
-                  <span className="text-[10px] text-zinc-400 uppercase tracking-wider">Likes</span>
+                  <span className="text-[11px] text-zinc-400 font-normal">Likes</span>
                 </div>
               </div>
 
-              {/* Action Buttons */}
-              <div className="flex items-center flex-wrap justify-center gap-2 pt-1">
+              {/* Action Buttons (Unified TikTok Button Styling) */}
+              <div className="w-full max-w-sm px-2 my-1.5">
                 {isOwnProfile ? (
-                  <>
+                  <div className="flex items-center justify-center gap-2">
                     <button
                       id="edit-profile-btn"
                       type="button"
                       onClick={() => setIsEditing(true)}
-                      className="flex items-center gap-1.5 rounded-xl border border-white/15 bg-zinc-900 px-3.5 py-2 text-xs font-bold text-white hover:bg-zinc-800 transition-colors"
+                      className="flex-1 min-w-0 flex items-center justify-center gap-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-750 border border-white/5 py-2 px-3 text-xs font-semibold text-white transition-all cursor-pointer shadow-xs active:scale-[0.98]"
                     >
-                      <Edit3 className="h-3.5 w-3.5" />
-                      <span>Edit Profile</span>
+                      <Edit3 className="h-3.5 w-3.5 text-zinc-300 shrink-0" />
+                      <span className="truncate">Edit Profile</span>
                     </button>
 
                     <button
                       id="nepal-withdrawal-cashout-btn"
                       type="button"
                       onClick={() => setIsWithdrawalModalOpen(true)}
-                      className="flex items-center gap-1.5 rounded-xl border border-amber-500/40 bg-amber-500/15 px-3.5 py-2 text-xs font-bold text-amber-300 hover:bg-amber-500/25 transition-colors shadow-sm"
+                      className="flex-1 min-w-0 flex items-center justify-center gap-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-750 border border-white/5 py-2 px-3 text-xs font-semibold text-white transition-all cursor-pointer shadow-xs active:scale-[0.98]"
                       title="eSewa / Khalti Point Withdrawal"
                     >
-                      <Coins className="h-3.5 w-3.5 text-amber-400" />
-                      <span>विथड्र ({(currentUser?.points ?? 0).toLocaleString('en-IN')} Pts)</span>
+                      <Wallet className="h-3.5 w-3.5 text-zinc-300 shrink-0" />
+                      <span className="truncate">विथड्र ({(currentUser?.points ?? 0).toLocaleString('en-IN')})</span>
                     </button>
 
                     <button
                       id="creator-monetization-btn"
                       type="button"
                       onClick={() => setIsEarningsModalOpen(true)}
-                      className="flex items-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-2 text-xs font-bold text-emerald-400 hover:bg-emerald-500/20 transition-colors shadow-sm"
+                      className="flex-1 min-w-0 flex items-center justify-center gap-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-750 border border-white/5 py-2 px-3 text-xs font-semibold text-white transition-all cursor-pointer shadow-xs active:scale-[0.98]"
+                      title="Creator Earnings"
                     >
-                      <DollarSign className="h-3.5 w-3.5 text-emerald-400" />
-                      <span>Earnings</span>
+                      <DollarSign className="h-3.5 w-3.5 text-zinc-300 shrink-0" />
+                      <span className="truncate">Earnings</span>
                     </button>
-
-                    <button
-                      id="profile-tiktop-dashboard-btn"
-                      type="button"
-                      onClick={() => setIsTikTopDashboardOpen(true)}
-                      className="flex items-center gap-1.5 rounded-xl border border-[#00ffcc]/40 bg-[#00ffcc]/10 px-3.5 py-2 text-xs font-bold text-[#00ffcc] hover:bg-[#00ffcc]/20 transition-colors shadow-sm"
-                      title="TikTop Live, Gifts & Withdraw Dashboard"
-                    >
-                      <span>🚀</span>
-                      <span>TikTop</span>
-                    </button>
-                  </>
+                  </div>
                 ) : (
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center justify-center gap-2">
                     <button
                       id="follow-creator-btn"
                       type="button"
                       onClick={handleToggleFollow}
-                      className={`flex items-center gap-1.5 rounded-xl px-6 py-2 text-xs font-bold transition-all shadow ${
+                      className={`flex-1 min-w-0 flex items-center justify-center gap-1.5 rounded-lg py-2 px-4 text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-[0.98] ${
                         isFollowing
-                          ? 'bg-zinc-800 text-zinc-300 border border-white/10'
+                          ? 'bg-zinc-800 text-zinc-200 hover:bg-zinc-700 border border-white/5'
                           : 'bg-rose-500 text-white hover:bg-rose-600'
                       }`}
                     >
@@ -793,10 +805,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                         id="admin-inspect-earnings-btn"
                         type="button"
                         onClick={() => setIsEarningsModalOpen(true)}
-                        className="flex items-center gap-1 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-bold text-emerald-400 hover:bg-emerald-500/20 transition-colors"
+                        className="flex items-center justify-center gap-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-white/5 px-3 py-2 text-xs font-semibold text-zinc-200 transition-colors cursor-pointer"
                         title="Inspect Creator Earnings"
                       >
-                        <DollarSign className="h-3.5 w-3.5" />
+                        <DollarSign className="h-3.5 w-3.5 text-zinc-300" />
                         <span>Earnings</span>
                       </button>
                     )}
@@ -804,7 +816,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                     <button
                       type="button"
                       onClick={handleToggleBlock}
-                      className="rounded-xl border border-white/10 bg-zinc-900 px-3 py-2 text-xs font-semibold text-zinc-400 hover:text-rose-400 hover:border-rose-500/30 transition-colors"
+                      className="rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-white/5 p-2 text-zinc-400 hover:text-rose-400 transition-colors cursor-pointer"
                       title="Block User"
                     >
                       <UserX className="h-4 w-4" />
@@ -813,94 +825,118 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 )}
               </div>
 
-              {/* Bio */}
-              <p className="text-xs text-zinc-300 max-w-sm leading-relaxed px-4">
-                {profileUser.bio || 'No bio yet.'}
-              </p>
+              {/* Bio Section */}
+              <div className="max-w-xs sm:max-w-sm text-xs text-zinc-300 text-center leading-relaxed px-4 my-2">
+                {profileUser.bio ? (
+                  <p className="whitespace-pre-line">
+                    {profileUser.bio.split(' ').map((word, i) =>
+                      word.startsWith('#') ? (
+                        <span key={i} className="text-zinc-100 font-semibold hover:underline cursor-pointer">
+                          {word}{' '}
+                        </span>
+                      ) : (
+                        word + ' '
+                      )
+                    )}
+                  </p>
+                ) : (
+                  <p className="text-zinc-500 italic">No bio yet.</p>
+                )}
+              </div>
             </>
           )}
         </div>
 
-        {/* Video Tabs and Grid (only if not blocked) */}
+        {/* Minimalist TikTok Content Tabs & Grid */}
         {!isBlocked && !isBlockedByTarget && (
           <>
-            <div className="mt-6 border-b border-white/10 flex items-center justify-around text-xs font-bold">
+            {/* Minimalist Icon Tabs with Active Border */}
+            <div className="mt-3 border-b border-white/10 flex items-center justify-around">
               <button
                 type="button"
                 onClick={() => setActiveTab('videos')}
-                className={`flex items-center gap-1.5 py-3 border-b-2 transition-colors ${
-                  activeTab === 'videos' ? 'border-white text-white' : 'border-transparent text-zinc-500 hover:text-zinc-300'
+                className={`flex-1 flex items-center justify-center py-2.5 relative transition-colors cursor-pointer ${
+                  activeTab === 'videos' ? 'text-white' : 'text-zinc-500 hover:text-zinc-300'
                 }`}
+                title={`Videos (${userVideos.length})`}
               >
-                <Grid className="h-4 w-4" />
-                <span>Videos ({userVideos.length})</span>
+                <Grid className="h-5 w-5 stroke-[1.75]" />
+                {activeTab === 'videos' && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-white rounded-full" />
+                )}
               </button>
 
               <button
                 type="button"
                 onClick={() => setActiveTab('liked')}
-                className={`flex items-center gap-1.5 py-3 border-b-2 transition-colors ${
-                  activeTab === 'liked' ? 'border-white text-white' : 'border-transparent text-zinc-500 hover:text-zinc-300'
+                className={`flex-1 flex items-center justify-center py-2.5 relative transition-colors cursor-pointer ${
+                  activeTab === 'liked' ? 'text-white' : 'text-zinc-500 hover:text-zinc-300'
                 }`}
+                title={`Liked (${likedVideos.length})`}
               >
-                <Heart className="h-4 w-4" />
-                <span>Liked ({likedVideos.length})</span>
+                <Heart className="h-5 w-5 stroke-[1.75]" />
+                {activeTab === 'liked' && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-white rounded-full" />
+                )}
               </button>
 
               <button
                 type="button"
                 onClick={() => setActiveTab('saved')}
-                className={`flex items-center gap-1.5 py-3 border-b-2 transition-colors ${
-                  activeTab === 'saved' ? 'border-white text-white' : 'border-transparent text-zinc-500 hover:text-zinc-300'
+                className={`flex-1 flex items-center justify-center py-2.5 relative transition-colors cursor-pointer ${
+                  activeTab === 'saved' ? 'text-white' : 'text-zinc-500 hover:text-zinc-300'
                 }`}
+                title={`Bookmarks (${savedVideos.length})`}
               >
-                <Bookmark className="h-4 w-4" />
-                <span>Bookmarks ({savedVideos.length})</span>
+                <Bookmark className="h-5 w-5 stroke-[1.75]" />
+                {activeTab === 'saved' && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-white rounded-full" />
+                )}
               </button>
             </div>
 
-            {/* Video Grid */}
-            <div className="mt-4">
+            {/* Video Grid (TikTok Seamless Aesthetic) */}
+            <div className="mt-1">
               {displayedVideos.length === 0 ? (
-                <div className="py-12 text-center text-zinc-500">
+                <div className="py-14 text-center text-zinc-500">
                   {activeTab === 'videos' && (
                     <>
-                      <Grid className="h-8 w-8 mx-auto mb-2 stroke-1" />
-                      <p className="text-sm font-medium">No videos uploaded yet</p>
-                      <p className="text-xs text-zinc-600 mt-1">Upload your first short video!</p>
+                      <Grid className="h-7 w-7 mx-auto mb-2 stroke-1 text-zinc-600" />
+                      <p className="text-xs font-semibold text-zinc-400">No videos uploaded yet</p>
+                      <p className="text-[11px] text-zinc-600 mt-0.5">Upload your first short video!</p>
                     </>
                   )}
                   {activeTab === 'liked' && (
                     <>
-                      <Heart className="h-8 w-8 mx-auto mb-2 stroke-1" />
-                      <p className="text-sm font-medium">No liked videos yet</p>
-                      <p className="text-xs text-zinc-600 mt-1">Videos you like will appear here.</p>
+                      <Heart className="h-7 w-7 mx-auto mb-2 stroke-1 text-zinc-600" />
+                      <p className="text-xs font-semibold text-zinc-400">No liked videos yet</p>
+                      <p className="text-[11px] text-zinc-600 mt-0.5">Videos you like will appear here.</p>
                     </>
                   )}
                   {activeTab === 'saved' && (
                     <>
-                      <Bookmark className="h-8 w-8 mx-auto mb-2 stroke-1" />
-                      <p className="text-sm font-medium">No bookmarks yet</p>
-                      <p className="text-xs text-zinc-600 mt-1">Save videos to watch them later.</p>
+                      <Bookmark className="h-7 w-7 mx-auto mb-2 stroke-1 text-zinc-600" />
+                      <p className="text-xs font-semibold text-zinc-400">No bookmarks yet</p>
+                      <p className="text-[11px] text-zinc-600 mt-0.5">Save videos to watch them later.</p>
                     </>
                   )}
                 </div>
               ) : (
-                <div className="grid grid-cols-3 gap-1.5">
+                <div className="grid grid-cols-3 gap-0.5 sm:gap-1">
                   {displayedVideos.map(v => (
                     <div
                       key={v.id}
                       onClick={() => onSelectVideo(v)}
-                      className="group relative aspect-9/16 overflow-hidden rounded-lg bg-zinc-900 cursor-pointer"
+                      className="group relative aspect-9/16 overflow-hidden bg-zinc-900 cursor-pointer"
                     >
                       <img
                         src={v.thumbnailUrl}
                         alt={v.caption}
-                        className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                        className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
                       />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-transparent pointer-events-none" />
 
-                      {/* Owner Quick Cover Select Button - Clean, no noisy text */}
+                      {/* Owner Quick Cover Select Button */}
                       {isOwnProfile && (
                         <button
                           type="button"
@@ -909,14 +945,15 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                             setCoverPickerVideo(v);
                           }}
                           className="absolute top-1.5 right-1.5 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 backdrop-blur-xs text-white shadow hover:bg-black/90 active:scale-90 transition-all cursor-pointer"
-                          title="Cover"
+                          title="Change Video Cover"
                         >
-                          <Camera className="h-3 w-3" />
+                          <Camera className="h-3 w-3 text-zinc-200" />
                         </button>
                       )}
 
-                      <div className="absolute bottom-1.5 left-1.5 flex items-center gap-1 text-[10px] text-white font-semibold">
-                        <Play className="h-2.5 w-2.5 fill-white" />
+                      {/* TikTok Style Play Count at Bottom-Left */}
+                      <div className="absolute bottom-1.5 left-1.5 flex items-center gap-1 text-[11px] text-white font-medium drop-shadow-sm pointer-events-none">
+                        <Play className="h-2.5 w-2.5 fill-white text-white" />
                         <span>{formatCount(v.viewsCount)}</span>
                       </div>
                     </div>

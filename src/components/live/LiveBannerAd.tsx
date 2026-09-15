@@ -145,18 +145,18 @@ export const LiveBannerAd: React.FC<LiveBannerAdProps> = ({
     return (
       <div
         id="live-banner-ad-paused"
-        className="relative w-full max-w-md mx-auto flex items-center justify-between gap-2 overflow-hidden rounded-xl border border-rose-500/50 bg-rose-950/85 px-2.5 py-1 text-white shadow-md backdrop-blur-md select-none animate-pulse"
+        className="relative w-full max-w-sm mx-auto flex items-center justify-between gap-2 overflow-hidden rounded-full border border-rose-500/40 bg-black/60 px-2.5 py-1 text-white shadow-sm backdrop-blur-md select-none animate-pulse"
       >
         <div className="flex items-center gap-1.5 min-w-0">
-          <span className="flex h-2 w-2 shrink-0 rounded-full bg-rose-500 animate-ping" />
-          <span className="text-[10.5px] font-black text-rose-300 whitespace-nowrap">
+          <span className="flex h-1.5 w-1.5 shrink-0 rounded-full bg-rose-500 animate-ping" />
+          <span className="text-[10px] font-bold text-rose-300 whitespace-nowrap">
             ⏸️ विज्ञापन रोकियो (Ad Paused)
           </span>
-          <span className="text-[9.5px] text-zinc-300 truncate hidden sm:inline">
-            मानिस नदेखिएकाले रोकिएको छ
+          <span className="text-[9px] text-zinc-400 truncate hidden sm:inline">
+            मानिस नदेखिएकाले
           </span>
         </div>
-        <span className="rounded bg-rose-500/30 border border-rose-400/40 px-1.5 py-0.2 text-[9px] font-black text-rose-200 shrink-0">
+        <span className="rounded-full bg-rose-500/20 border border-rose-400/30 px-1.5 py-0.2 text-[8px] font-bold text-rose-200 shrink-0">
           PAUSED
         </span>
       </div>
@@ -169,49 +169,36 @@ export const LiveBannerAd: React.FC<LiveBannerAdProps> = ({
     <div
       id="live-top-banner-ad"
       onClick={handleClick}
-      className="relative w-full max-w-md mx-auto flex items-center justify-between gap-2 overflow-hidden rounded-xl border border-amber-400/30 bg-zinc-950/85 px-2.5 py-1 text-white shadow-md backdrop-blur-md transition-all hover:border-amber-400/70 active:scale-[0.99] cursor-pointer group select-none ring-1 ring-white/10"
+      className="relative w-full max-w-sm mx-auto flex items-center justify-between gap-2 overflow-hidden rounded-full border border-white/10 bg-black/50 hover:bg-black/70 px-2 py-0.5 text-white shadow-sm backdrop-blur-md transition-all active:scale-[0.99] cursor-pointer group select-none"
     >
-      {/* Background subtle brand accent gradient */}
-      <div className="absolute inset-0 bg-gradient-to-r from-amber-500/15 via-rose-500/10 to-transparent pointer-events-none" />
-
-      <div className="flex items-center gap-2 min-w-0 z-10">
+      <div className="flex items-center gap-1.5 min-w-0 z-10">
         {/* Ad Thumbnail / Icon */}
-        <div className="relative h-7 w-7 shrink-0 overflow-hidden rounded-lg border border-amber-400/30 bg-zinc-800 shadow-sm">
+        <div className="relative h-5 w-5 shrink-0 overflow-hidden rounded-full border border-amber-400/40 bg-zinc-800">
           <img
             src={activeAd.imageUrl}
             alt={activeAd.brand}
             className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300"
           />
-          <span className="absolute bottom-0 left-0 right-0 bg-gradient-to-r from-amber-500 to-yellow-400 text-[6.5px] font-black text-black text-center leading-tight">
-            AD
-          </span>
         </div>
 
         {/* Text Details */}
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5">
-            <span className="text-[11px] font-black text-amber-300 truncate">
-              {activeAd.brand}
-            </span>
-            <span className="rounded-full bg-amber-400/20 border border-amber-400/30 px-1 py-0.2 text-[7.5px] font-black text-amber-200 flex items-center gap-0.5 shrink-0">
-              <Sparkles className="h-1.5 w-1.5 text-amber-300" /> प्रायोजक
-            </span>
-          </div>
-          <p className="text-[9.5px] font-medium text-zinc-200 truncate leading-tight">
+        <div className="min-w-0 flex items-center gap-1">
+          <span className="text-[10px] font-bold text-amber-300 truncate max-w-[90px] sm:max-w-[130px]">
+            {activeAd.brand}
+          </span>
+          <span className="text-zinc-500 text-[10px]">•</span>
+          <p className="text-[9.5px] font-normal text-zinc-300 truncate max-w-[120px] sm:max-w-[160px]">
             {activeAd.title}
           </p>
         </div>
       </div>
 
-      {/* CTA Button */}
-      <div className="shrink-0 z-10 flex items-center gap-1 pl-1">
-        <button
-          type="button"
-          className="flex items-center gap-1 rounded-lg bg-gradient-to-r from-amber-500 via-rose-500 to-pink-500 px-2 py-0.5 text-[9.5px] font-black text-white shadow-sm hover:brightness-110 active:scale-95 transition-all"
-        >
-          <span>{activeAd.ctaText || 'हेर्नुहोस्'}</span>
-          <ExternalLink className="h-2.5 w-2.5" />
-        </button>
+      {/* Subtle CTA Pill */}
+      <div className="shrink-0 z-10 flex items-center pr-1">
+        <span className="inline-flex items-center gap-0.5 text-[8.5px] font-bold text-amber-300/90 bg-amber-400/10 border border-amber-400/20 rounded-full px-1.5 py-0.2">
+          <span>{activeAd.ctaText || 'Open'}</span>
+          <ExternalLink className="h-2 w-2" />
+        </span>
       </div>
     </div>
   );

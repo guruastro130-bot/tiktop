@@ -11,9 +11,11 @@ export interface LuckyGiftTier {
 }
 
 export const LUCKY_GIFT_TIERS: LuckyGiftTier[] = [
-  { id: 'lg_1000', name: 'Lucky Box 🎁', price: 1000, icon: '🎁', color: '#00ffcc' },
-  { id: 'lg_5000', name: 'Lucky Clover 🍀', price: 5000, icon: '🍀', color: '#10b981' },
-  { id: 'lg_10000', name: 'Jackpot Diamond 💎', price: 10000, icon: '💎', color: '#f59e0b' },
+  { id: 'lg_100', name: 'Lucky Coin 🪙', price: 100, icon: '🪙', color: '#10b981' },
+  { id: 'lg_500', name: 'Lucky Clover 🍀', price: 500, icon: '🍀', color: '#00ffcc' },
+  { id: 'lg_1000', name: 'Lucky Box 🎁', price: 1000, icon: '🎁', color: '#3b82f6' },
+  { id: 'lg_2500', name: 'Lucky Wheel 🎡', price: 2500, icon: '🎡', color: '#a855f7' },
+  { id: 'lg_5000', name: 'Jackpot Diamond 💎', price: 5000, icon: '💎', color: '#f59e0b' },
 ];
 
 export interface LuckySpinResult {

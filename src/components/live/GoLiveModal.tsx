@@ -56,6 +56,7 @@ export const GoLiveModal: React.FC<GoLiveModalProps> = ({
   const [enableBannerAds, setEnableBannerAds] = useState<boolean>(true);
   const [isMicMuted, setIsMicMuted] = useState<boolean>(false);
   const [cameraFacing, setCameraFacing] = useState<'user' | 'environment'>('user');
+  const [hasCameraPreviewStream, setHasCameraPreviewStream] = useState<boolean>(false);
 
   // Professional TikTok Video Setup States (Bokeh, Soft Light, Subject Focus)
   const [proSetupEnabled, setProSetupEnabled] = useState<boolean>(true);
@@ -91,6 +92,41 @@ export const GoLiveModal: React.FC<GoLiveModalProps> = ({
   };
 
   // Initialize camera for video live preview
+  const startCamera = React.useCallback(async () => {
+    try {
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        let stream: MediaStream | null = null;
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: cameraFacing },
+            audio: false,
+          });
+        } catch {
+          try {
+            stream = await navigator.mediaDevices.getUserMedia({
+              video: true,
+              audio: false,
+            });
+          } catch {
+            stream = null;
+          }
+        }
+        if (stream && stream.getVideoTracks().some(t => t.readyState === 'live')) {
+          mediaStreamRef.current = stream;
+          setHasCameraPreviewStream(true);
+          if (videoPreviewRef.current) {
+            videoPreviewRef.current.srcObject = stream;
+            videoPreviewRef.current.play().catch(() => {});
+          }
+          return;
+        }
+      }
+      setHasCameraPreviewStream(false);
+    } catch {
+      setHasCameraPreviewStream(false);
+    }
+  }, [cameraFacing]);
+
   useEffect(() => {
     if (!isOpen || streamType !== 'video') {
       if (!isStartingLiveRef.current && mediaStreamRef.current) {
@@ -100,47 +136,16 @@ export const GoLiveModal: React.FC<GoLiveModalProps> = ({
       return;
     }
 
-    let isMounted = true;
-
-    const startCamera = async () => {
-      try {
-        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-          let stream: MediaStream | null = null;
-          try {
-            stream = await navigator.mediaDevices.getUserMedia({
-              video: { facingMode: cameraFacing },
-              audio: false,
-            });
-          } catch {
-            stream = await navigator.mediaDevices.getUserMedia({
-              video: true,
-              audio: false,
-            });
-          }
-          if (isMounted && stream) {
-            mediaStreamRef.current = stream;
-            if (videoPreviewRef.current) {
-              videoPreviewRef.current.srcObject = stream;
-              videoPreviewRef.current.play().catch(() => {});
-            }
-          }
-        }
-      } catch {
-        // Fallback or permission denied handled gracefully
-      }
-    };
-
     startCamera();
 
     return () => {
-      isMounted = false;
       // Do NOT kill the camera stream tracks if transitioning directly into Live Room!
       if (!isStartingLiveRef.current && mediaStreamRef.current) {
         mediaStreamRef.current.getTracks().forEach(t => t.stop());
         mediaStreamRef.current = null;
       }
     };
-  }, [isOpen, streamType, cameraFacing]);
+  }, [isOpen, streamType, startCamera]);
 
   if (!isOpen) return null;
 
@@ -367,14 +372,42 @@ export const GoLiveModal: React.FC<GoLiveModalProps> = ({
                   <div className="absolute inset-0 bg-neutral-900/60 backdrop-blur-md pointer-events-none z-10" />
                 )}
 
-                <video
-                  ref={videoPreviewRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  style={getVideoFilterStyle()}
-                  className="h-full w-full object-cover"
-                />
+                {hasCameraPreviewStream ? (
+                  <video
+                    ref={videoPreviewRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    style={getVideoFilterStyle()}
+                    className={`h-full w-full object-cover ${cameraFacing === 'user' ? '-scale-x-100' : ''}`}
+                  />
+                ) : (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-b from-zinc-900 to-black p-4 text-center select-none">
+                    <div className="relative mb-3">
+                      <div className="absolute -inset-2 rounded-full bg-rose-500/30 animate-pulse blur-xs" />
+                      <img
+                        src={currentUser?.avatarUrl || INITIAL_USERS[0].avatarUrl}
+                        alt="Face Preview"
+                        className="relative h-24 w-24 rounded-full border-2 border-rose-500 object-cover shadow-lg"
+                      />
+                      <span className="absolute bottom-0 right-0 h-6 w-6 rounded-full bg-rose-600 border border-white flex items-center justify-center text-[10px]">
+                        📹
+                      </span>
+                    </div>
+                    <p className="text-xs font-bold text-white">तपाईंको फेस लाइभ प्रिभ्यू</p>
+                    <p className="text-[10px] text-zinc-400 mt-0.5 max-w-[200px]">
+                      लाइभ सुरु भएपछि तपाईंको अनुहार प्रत्यक्ष देखिनेछ
+                    </p>
+                    <button
+                      type="button"
+                      onClick={startCamera}
+                      className="mt-2.5 flex items-center gap-1.5 rounded-full bg-rose-600 px-3 py-1 text-[11px] font-black text-white hover:bg-rose-500 active:scale-95 transition-transform"
+                    >
+                      <VideoIcon className="h-3 w-3" />
+                      <span>क्यामेरा अन गर्नुहोस्</span>
+                    </button>
+                  </div>
+                )}
 
                 {/* Soft Lighting Vignette Ring Light Simulation */}
                 {proSetupEnabled && softLighting && (

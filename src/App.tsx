@@ -24,6 +24,7 @@ import { LiveDiscoveryView } from './components/live/LiveDiscoveryView';
 import { LiveRoomView } from './components/live/LiveRoomView';
 import { GoLiveModal } from './components/live/GoLiveModal';
 import { LiveStartCountdownPopup } from './components/live/LiveStartCountdownPopup';
+import { CreateActionSheet, CreateOptionType } from './components/CreateActionSheet';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { TikTopApp } from './components/TikTopApp';
 
@@ -32,6 +33,8 @@ const AppContent: React.FC = () => {
   const { currentUser, isAdmin, openAuthModal, resetUserBans } = useAuth();
 
   const [currentTab, setCurrentTab] = useState<NavTab>('home');
+  const [isCreateMenuOpen, setIsCreateMenuOpen] = useState<boolean>(false);
+  const [uploadInitialMode, setUploadInitialMode] = useState<'video' | 'live' | 'voice_room'>('video');
   const [videos, setVideos] = useState<Video[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [isTikTopDashboardOpen, setIsTikTopDashboardOpen] = useState<boolean>(false);
@@ -283,8 +286,7 @@ const AppContent: React.FC = () => {
     setLiveRooms(prev => [hostedRoom, ...prev]);
     setActiveLiveRoom(hostedRoom);
     setPendingLiveRoom(null);
-    // Explicitly transition tab away from upload/preview so background tab is LIVE
-    setCurrentTab('live');
+    setCurrentTab('home');
   };
 
   // If user clicks cancel on the 3/2/1 countdown modal
@@ -346,13 +348,12 @@ const AppContent: React.FC = () => {
     // Direct instant start into the live room for guaranteed reliability
     setLiveRooms(prev => [newRoom, ...prev]);
     setActiveLiveRoom(newRoom);
-    setCurrentTab('live');
+    setCurrentTab('home');
   };
 
   const handleCloseLiveRoom = () => {
     setActiveLiveRoom(null);
-    // When exiting live room, remain on LIVE feed/discovery rather than reverting to upload camera preview
-    setCurrentTab('live');
+    setCurrentTab('home');
   };
 
   const handleUpdateLiveRoom = (updatedRoom: LiveRoom) => {
@@ -409,7 +410,12 @@ const AppContent: React.FC = () => {
                 onOpenCreatorProfile={handleOpenCreatorProfile}
                 onHashtagClick={handleHashtagClick}
                 onOpenLive={() => {
-                  setCurrentTab('live');
+                  const activeStream = liveRooms.find(r => r.status === 'live');
+                  if (activeStream) {
+                    handleSelectLiveRoom(activeStream);
+                  } else {
+                    setCurrentTab('discover');
+                  }
                 }}
                 onOpenAdmin={() => setIsAdminOpen(true)}
                 onRefresh={fetchVideos}
@@ -417,26 +423,21 @@ const AppContent: React.FC = () => {
               />
             )}
 
-            {currentTab === 'discover' && (
+            {(currentTab === 'discover' || currentTab === 'live') && (
               <DiscoverView
                 videos={videos}
+                liveRooms={liveRooms}
+                onSelectLiveRoom={handleSelectLiveRoom}
                 onSelectVideo={handleSelectVideoFromGrid}
                 onSelectCreator={handleOpenCreatorProfile}
                 initialSearchQuery={discoverInitialTag}
-              />
-            )}
-
-            {currentTab === 'live' && (
-              <LiveDiscoveryView
-                rooms={liveRooms}
-                onSelectRoom={handleSelectLiveRoom}
                 onOpenGoLive={() => setIsGoLiveOpen(true)}
-                onDirectStartLive={handleDirectStartLive}
               />
             )}
 
             {currentTab === 'upload' && (
               <UploadView
+                initialMode={uploadInitialMode}
                 onUploadSuccess={handleUploadSuccess}
                 onCancel={() => setCurrentTab('home')}
                 onStartLive={handleRequestStartLive}
@@ -483,8 +484,19 @@ const AppContent: React.FC = () => {
             setSelectedCreatorId(null);
             setCurrentTab(tab);
           }}
+          onOpenCreateMenu={() => setIsCreateMenuOpen(true)}
         />
       )}
+
+      {/* Create / Go Live Action Sheet (Video Post, Face Live, Party Live) */}
+      <CreateActionSheet
+        isOpen={isCreateMenuOpen}
+        onClose={() => setIsCreateMenuOpen(false)}
+        onSelectOption={(option: CreateOptionType) => {
+          setUploadInitialMode(option);
+          setCurrentTab('upload');
+        }}
+      />
 
       {/* Full-Screen Immersive Live Streaming View */}
       {activeLiveRoom && (
@@ -600,12 +612,14 @@ const AppContent: React.FC = () => {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <NotificationProvider>
-        <AdProvider>
-          <AppContent />
-        </AdProvider>
-      </NotificationProvider>
-    </AuthProvider>
+    <ErrorBoundary fallbackTitle="अनुप्रयोग लोड गर्न समस्या भयो (App Error)">
+      <AuthProvider>
+        <NotificationProvider>
+          <AdProvider>
+            <AppContent />
+          </AdProvider>
+        </NotificationProvider>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }

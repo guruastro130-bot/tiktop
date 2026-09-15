@@ -27,6 +27,7 @@ export interface DirectMessage {
   gift?: {
     nameNp: string;
     icon: string;
+    imageUrl?: string;
     coins: number;
     multiplier: number;
   };
@@ -188,6 +189,7 @@ export const InboxChatModal: React.FC<InboxChatModalProps> = ({
       gift: {
         nameNp: selectedGift.nameNp,
         icon: selectedGift.icon,
+        imageUrl: selectedGift.imageUrl,
         coins: selectedGift.coins,
         multiplier: giftMultiplier,
       },
@@ -313,7 +315,11 @@ export const InboxChatModal: React.FC<InboxChatModalProps> = ({
                 >
                   <div className="max-w-[80%] rounded-2xl p-3 bg-gradient-to-r from-amber-500/20 via-rose-500/20 to-pink-500/20 border border-amber-500/40 shadow-xl space-y-2 animate-scale-up">
                     <div className="flex items-center gap-2">
-                      <span className="text-3xl filter drop-shadow-md">{msg.gift.icon}</span>
+                      {msg.gift.imageUrl ? (
+                        <img src={msg.gift.imageUrl} alt={msg.gift.nameNp} className="h-8 w-8 object-cover rounded-md border border-amber-400/60 shadow-md" />
+                      ) : (
+                        <span className="text-3xl filter drop-shadow-md">{msg.gift.icon}</span>
+                      )}
                       <div>
                         <div className="flex items-center gap-1">
                           <span className="text-xs font-black text-amber-300">
@@ -478,7 +484,11 @@ export const InboxChatModal: React.FC<InboxChatModalProps> = ({
                         : 'border-white/10 bg-zinc-950/80 hover:bg-zinc-800'
                     }`}
                   >
-                    <span className="text-2xl filter drop-shadow">{gift.icon}</span>
+                    {gift.imageUrl ? (
+                      <img src={gift.imageUrl} alt={gift.nameNp} className="h-7 w-7 object-cover rounded-md border border-amber-400/40 mb-0.5" />
+                    ) : (
+                      <span className="text-2xl filter drop-shadow">{gift.icon}</span>
+                    )}
                     <span className="text-[10px] font-bold text-white truncate max-w-full text-center">
                       {gift.nameNp}
                     </span>

@@ -3,14 +3,15 @@ import { Home, Compass, Plus, MessageSquare, User as UserIcon, Radio } from 'luc
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../context/NotificationContext';
 
-export type NavTab = 'home' | 'discover' | 'live' | 'upload' | 'notifications' | 'profile';
+export type NavTab = 'home' | 'discover' | 'upload' | 'notifications' | 'profile' | 'live';
 
 interface NavbarProps {
   currentTab: NavTab;
   onTabChange: (tab: NavTab) => void;
+  onOpenCreateMenu?: () => void;
 }
 
-export const Navbar: React.FC<NavbarProps> = ({ currentTab, onTabChange }) => {
+export const Navbar: React.FC<NavbarProps> = ({ currentTab, onTabChange, onOpenCreateMenu }) => {
   const { currentUser, openAuthModal } = useAuth();
   const { unreadCount } = useNotifications();
 
@@ -25,6 +26,8 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onTabChange }) => {
   const handleUploadClick = () => {
     if (!currentUser) {
       openAuthModal();
+    } else if (onOpenCreateMenu) {
+      onOpenCreateMenu();
     } else {
       onTabChange('upload');
     }
@@ -61,32 +64,12 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onTabChange }) => {
         <span className="text-[10px] font-bold">Discover</span>
       </button>
 
-      {/* Live Tab */}
-      <button
-        id="nav-live-btn"
-        type="button"
-        onClick={() => onTabChange('live')}
-        className={`relative flex flex-col items-center gap-1 transition-colors ${
-          currentTab === 'live' ? 'text-rose-500' : 'text-zinc-500 hover:text-zinc-300'
-        }`}
-        title="TikTok LIVE"
-      >
-        <div className="relative">
-          <Radio className="h-5 w-5" />
-          <span className="absolute -top-1 -right-1 flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75" />
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500" />
-          </span>
-        </div>
-        <span className="text-[10px] font-bold">LIVE</span>
-      </button>
-
       {/* Create / Upload (+) Center Button */}
       <button
         id="nav-create-btn"
         type="button"
         onClick={handleUploadClick}
-        className="group relative flex items-center justify-center -my-1 px-1 focus:outline-none"
+        className="group relative flex items-center justify-center -my-1 px-1 focus:outline-none cursor-pointer"
         title="Create Video"
       >
         <div className="relative flex h-8 w-11 items-center justify-center rounded-lg bg-white text-black shadow-md transition-transform group-hover:scale-105 active:scale-95">

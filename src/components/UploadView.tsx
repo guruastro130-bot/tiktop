@@ -124,6 +124,12 @@ export const UploadView: React.FC<UploadViewProps> = ({
   // Studio Mode: Video Post vs. Video Live vs. Voice Live Room
   const [studioMode, setStudioMode] = useState<'video' | 'live' | 'voice_room'>(initialMode);
 
+  useEffect(() => {
+    if (initialMode) {
+      setStudioMode(initialMode);
+    }
+  }, [initialMode]);
+
   // LIVE Stream setup states
   const LIVE_CATEGORIES = [
     { id: 'nepal', label: '🇳🇵 नेपाल' },
@@ -782,30 +788,54 @@ export const UploadView: React.FC<UploadViewProps> = ({
   return (
     <div
       id="creation-studio-container"
-      className="h-full w-full bg-zinc-950 text-white overflow-y-auto pb-28 select-none"
+      className="h-full w-full bg-zinc-950 text-white overflow-y-auto pb-16 select-none"
     >
       {studioMode === 'video' ? (
         <div className="max-w-xl mx-auto px-4 py-4">
 
-          {/* Dynamic Studio Header reflecting active mode */}
-          <div className="flex items-center justify-between border-b border-white/10 pb-3 mb-5">
+          {/* Dynamic Studio Header with Clean Segmented Switcher */}
+          <div className="flex items-center justify-between border-b border-white/10 pb-3 mb-5 gap-2">
             <button
               type="button"
               onClick={onCancel}
               disabled={isPipelineActive}
-              className="flex items-center gap-1.5 text-zinc-400 hover:text-white transition-colors cursor-pointer text-xs font-semibold"
+              className="flex items-center gap-1 text-zinc-400 hover:text-white transition-colors cursor-pointer text-xs font-semibold shrink-0"
+              title="रद्द गर्नुहोस्"
             >
               <X className="h-5 w-5" />
-              <span>रद्द (Cancel)</span>
+              <span className="hidden sm:inline">रद्द (Cancel)</span>
             </button>
 
-            <h1 className="text-base font-black text-white flex items-center gap-2">
-              <Film className="h-4 w-4 text-rose-500" />
-              <span>भिडियो पोस्ट (POST)</span>
-            </h1>
+            {/* Clean Segmented Mode Selector: Video Post | Face Live | Party Live */}
+            <div className="flex items-center p-1 rounded-full bg-white/5 border border-white/10 backdrop-blur-md">
+              <button
+                type="button"
+                onClick={() => setStudioMode('video')}
+                className="px-2.5 sm:px-3.5 py-1.5 rounded-full text-xs font-black transition-all bg-rose-500 text-white shadow-md flex items-center gap-1.5 cursor-pointer"
+              >
+                <Film className="h-3.5 w-3.5" />
+                <span>भिडियो पोस्ट</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setStudioMode('live')}
+                className="px-2.5 sm:px-3 py-1.5 rounded-full text-xs font-bold transition-all text-zinc-400 hover:text-white flex items-center gap-1.5 cursor-pointer"
+              >
+                <Radio className="h-3.5 w-3.5 text-red-400" />
+                <span>फेस लाइभ</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setStudioMode('voice_room')}
+                className="px-2.5 sm:px-3 py-1.5 rounded-full text-xs font-bold transition-all text-zinc-400 hover:text-white flex items-center gap-1.5 cursor-pointer"
+              >
+                <Headphones className="h-3.5 w-3.5 text-purple-400" />
+                <span>पार्टी लाइभ</span>
+              </button>
+            </div>
 
-            <div className="w-16 flex justify-end">
-              <span className="text-[10px] uppercase tracking-wider font-mono font-bold text-rose-400/80 bg-rose-500/10 px-2 py-0.5 rounded-full border border-rose-500/20">
+            <div className="w-8 sm:w-16 flex justify-end shrink-0">
+              <span className="text-[10px] uppercase tracking-wider font-mono font-bold text-rose-400/80 bg-rose-500/10 px-2 py-0.5 rounded-full border border-rose-500/20 hidden sm:inline">
                 POST
               </span>
             </div>
@@ -1154,63 +1184,55 @@ export const UploadView: React.FC<UploadViewProps> = ({
             </div>
           )}
 
-          {/* Top Header Controls Overlay: Cancel, विधा (Category) Harmonized Selector, Tools */}
-          <div className="relative z-20 flex items-center justify-between p-3.5 sm:p-4 gap-2">
+          {/* Top Header Controls Overlay: Cancel, Clean Segmented Mode Selector, Tools */}
+          <div className="relative z-20 flex items-center justify-between p-3 sm:p-4 gap-2">
             <button
               type="button"
-              onClick={() => {
-                // Return cleanly to Video/Post mode without kicking user back to homepage
-                setStudioMode('video');
-              }}
+              onClick={onCancel}
               className="rounded-full bg-black/60 border border-white/20 p-2 text-white hover:bg-black/80 backdrop-blur-md transition-all active:scale-95 shrink-0 cursor-pointer"
-              title="भिडियो पोस्टमा फर्कनुहोस् (Back to Post)"
+              title="बन्द गर्नुहोस् (Close)"
             >
               <X className="h-4 w-4" />
             </button>
 
-            {/* Harmonized विधा (Category) Quick-Picker Pill */}
-            <div className="relative">
+            {/* Clean Segmented Mode Selector: Video Post | Face Live | Party Live */}
+            <div className="flex items-center p-1 rounded-full bg-black/60 border border-white/15 backdrop-blur-xl">
               <button
                 type="button"
-                onClick={() => setIsCategoryPickerOpen(prev => !prev)}
-                className="flex items-center gap-1.5 rounded-full bg-black/70 border border-rose-500/60 px-3.5 py-1.5 text-xs font-black text-white backdrop-blur-md shadow-lg hover:bg-black/85 transition-all active:scale-95 ring-2 ring-rose-500/20"
+                onClick={() => setStudioMode('video')}
+                className="px-2.5 sm:px-3 py-1 rounded-full text-xs font-bold transition-all text-zinc-400 hover:text-white flex items-center gap-1 cursor-pointer"
               >
-                <Sparkles className="h-3.5 w-3.5 text-rose-400 animate-pulse" />
-                <span>विधा: {LIVE_CATEGORIES.find(c => c.id === liveCategory)?.label || '🇳🇵 नेपाल'}</span>
-                <ChevronDown className={`h-3 w-3 text-rose-300 transition-transform ${isCategoryPickerOpen ? 'rotate-180' : ''}`} />
+                <Film className="h-3.5 w-3.5 text-rose-400" />
+                <span>भिडियो</span>
               </button>
-
-              {/* Category Dropdown Popover */}
-              {isCategoryPickerOpen && (
-                <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-72 rounded-2xl border border-white/15 bg-zinc-950/95 p-2 backdrop-blur-xl shadow-2xl z-50 animate-fade-in">
-                  <p className="text-[10px] font-extrabold text-zinc-400 px-2 py-1 uppercase tracking-wider">
-                    लाइभ विधा छान्नुहोस् (Select Category):
-                  </p>
-                  <div className="grid grid-cols-2 gap-1.5 mt-1">
-                    {LIVE_CATEGORIES.map(c => (
-                      <button
-                        key={c.id}
-                        type="button"
-                        onClick={() => {
-                          setLiveCategory(c.id);
-                          setIsCategoryPickerOpen(false);
-                        }}
-                        className={`rounded-xl p-2 text-left text-xs font-bold transition-all flex items-center gap-1.5 ${
-                          liveCategory === c.id
-                            ? 'bg-rose-500 text-white shadow-md ring-1 ring-rose-400'
-                            : 'bg-zinc-900/80 text-zinc-300 hover:bg-zinc-800'
-                        }`}
-                      >
-                        <span>{c.label}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
+              <button
+                type="button"
+                onClick={() => setStudioMode('live')}
+                className={`px-2.5 sm:px-3 py-1 rounded-full text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
+                  studioMode === 'live'
+                    ? 'bg-red-600 text-white shadow-sm'
+                    : 'text-zinc-400 hover:text-white'
+                }`}
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-red-400 animate-pulse" />
+                <span>फेस लाइभ</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setStudioMode('voice_room')}
+                className={`px-2.5 sm:px-3 py-1 rounded-full text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
+                  studioMode === 'voice_room'
+                    ? 'bg-purple-600 text-white shadow-sm'
+                    : 'text-zinc-400 hover:text-white'
+                }`}
+              >
+                <Headphones className="h-3.5 w-3.5 text-purple-300" />
+                <span>पार्टी लाइभ</span>
+              </button>
             </div>
 
             {/* Quick Floating Live Tools */}
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 shrink-0">
               {studioMode === 'live' && (
                 <button
                   type="button"
@@ -1235,22 +1257,65 @@ export const UploadView: React.FC<UploadViewProps> = ({
             </div>
           </div>
 
-          {/* Floating Upper Live Title Card */}
-          <div className="relative z-20 mx-4 max-w-md w-full self-center rounded-2xl border border-white/15 bg-black/55 p-3 backdrop-blur-md shadow-xl">
-            <div className="flex items-center gap-2">
-              <span className="text-rose-500 font-bold text-xs">🔴</span>
-              <input
-                type="text"
-                value={liveTitle}
-                onChange={e => setLiveTitle(e.target.value)}
-                placeholder="लाइभ शीर्षक लेख्नुहोस् (Live Title)..."
-                className="w-full bg-transparent text-xs font-bold text-white placeholder-zinc-400 focus:outline-none"
-                maxLength={60}
-              />
+          {/* Floating Upper Live Title & विधा (Category) Card */}
+          <div className="relative z-20 mx-4 max-w-md w-full self-center rounded-2xl border border-white/15 bg-black/60 p-3 backdrop-blur-md shadow-xl space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <span className="text-rose-500 font-bold text-xs shrink-0">🔴</span>
+                <input
+                  type="text"
+                  value={liveTitle}
+                  onChange={e => setLiveTitle(e.target.value)}
+                  placeholder="लाइभ शीर्षक लेख्नुहोस् (Live Title)..."
+                  className="w-full bg-transparent text-xs font-bold text-white placeholder-zinc-400 focus:outline-none"
+                  maxLength={60}
+                />
+              </div>
+
+              {/* Harmonized विधा (Category) Quick-Picker Pill */}
+              <div className="relative shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setIsCategoryPickerOpen(prev => !prev)}
+                  className="flex items-center gap-1 rounded-full bg-white/10 hover:bg-white/15 border border-rose-500/50 px-2.5 py-1 text-[11px] font-bold text-white backdrop-blur-md transition-all active:scale-95"
+                >
+                  <Sparkles className="h-3 w-3 text-rose-400 animate-pulse" />
+                  <span>{LIVE_CATEGORIES.find(c => c.id === liveCategory)?.label || '🇳🇵 नेपाल'}</span>
+                  <ChevronDown className={`h-3 w-3 text-rose-300 transition-transform ${isCategoryPickerOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {/* Category Dropdown Popover */}
+                {isCategoryPickerOpen && (
+                  <div className="absolute top-full right-0 mt-2 w-64 rounded-2xl border border-white/15 bg-zinc-950/95 p-2 backdrop-blur-xl shadow-2xl z-50 animate-fade-in">
+                    <p className="text-[10px] font-extrabold text-zinc-400 px-2 py-1 uppercase tracking-wider">
+                      लाइभ विधा छान्नुहोस् (Select Category):
+                    </p>
+                    <div className="grid grid-cols-2 gap-1.5 mt-1">
+                      {LIVE_CATEGORIES.map(c => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => {
+                            setLiveCategory(c.id);
+                            setIsCategoryPickerOpen(false);
+                          }}
+                          className={`rounded-xl p-2 text-left text-xs font-bold transition-all flex items-center gap-1.5 ${
+                            liveCategory === c.id
+                              ? 'bg-rose-500 text-white shadow-md ring-1 ring-rose-400'
+                              : 'bg-zinc-900/80 text-zinc-300 hover:bg-zinc-800'
+                          }`}
+                        >
+                          <span>{c.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Preset Suggestions */}
-            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pt-2 border-t border-white/10 mt-2">
+            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pt-2 border-t border-white/10">
               {['🇳🇵 नेपाली रमाइलो गफगाफ', '🎵 लाइभ सांगीतिक साँझ', '💬 मनका कुरा', '🔥 च्यालेन्ज र उपहार'].map(phrase => (
                 <button
                   key={phrase}
@@ -1302,7 +1367,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
           )}
 
           {/* Bottom Floating Live Controls & Launch Button */}
-          <div className="relative z-20 p-4 pb-28 flex flex-col items-center max-w-md mx-auto w-full gap-3">
+          <div className="relative z-20 p-4 pb-8 flex flex-col items-center max-w-md mx-auto w-full gap-3">
             {/* Beauty Filters horizontal strip (Video Live only) */}
             {studioMode === 'live' && (
               <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar w-full justify-center">
@@ -1345,132 +1410,6 @@ export const UploadView: React.FC<UploadViewProps> = ({
           </div>
         </div>
       )}
-
-      {/* =========================================================================
-          TIKTOK-STYLE BOTTOM SLIDER CAROUSEL (MODE SELECTOR: POST, FACE LIVE, PARTY LIVE)
-         ========================================================================= */}
-      <div
-        id="tiktok-camera-bottom-carousel"
-        className="fixed bottom-0 left-0 right-0 z-40 max-w-xl mx-auto border-t border-white/10 bg-black/95 backdrop-blur-xl py-2.5 px-3 flex flex-col items-center select-none shadow-2xl"
-      >
-        {/* Carousel Row with Prev/Next Controls & Horizontal Scroll Bar */}
-        <div className="w-full flex items-center justify-between gap-1">
-          {/* Left Shift Button */}
-          <button
-            type="button"
-            disabled={studioMode === 'video'}
-            onClick={() => {
-              if (studioMode === 'voice_room') setStudioMode('live');
-              else if (studioMode === 'live') setStudioMode('video');
-            }}
-            className="h-8 w-8 rounded-full flex items-center justify-center text-zinc-400 hover:text-white disabled:opacity-20 disabled:pointer-events-none transition-all active:scale-95 shrink-0"
-            title="Previous Mode"
-          >
-            <ChevronLeft className="h-5 w-5" />
-          </button>
-
-          {/* Centered Scrollable Mode Track */}
-          <div
-            className="flex-1 flex items-center justify-center gap-5 sm:gap-8 overflow-x-auto no-scrollbar scroll-smooth py-1 px-2"
-          >
-            {/* Mode 1: POST */}
-            <button
-              type="button"
-              onClick={() => setStudioMode('video')}
-              className={`flex flex-col items-center transition-all cursor-pointer shrink-0 ${
-                studioMode === 'video'
-                  ? 'text-white scale-110 font-black'
-                  : 'text-zinc-500 hover:text-zinc-300 font-bold'
-              }`}
-            >
-              <span className="text-xs sm:text-sm tracking-wider">POST</span>
-              <span className="text-[9px] text-zinc-400 font-medium">भिडियो</span>
-              {studioMode === 'video' && (
-                <span className="h-1 w-5 rounded-full bg-rose-500 mt-1 shadow-sm shadow-rose-500" />
-              )}
-            </button>
-
-            {/* Mode 2: FACE LIVE */}
-            <button
-              type="button"
-              onClick={() => {
-                if (studioMode === 'live') {
-                  // Direct 1-tap launch into Live Room View
-                  handleLaunchLive('video');
-                } else {
-                  setStudioMode('live');
-                }
-              }}
-              className={`flex flex-col items-center transition-all cursor-pointer shrink-0 ${
-                studioMode === 'live'
-                  ? 'text-rose-400 scale-110 font-black'
-                  : 'text-zinc-500 hover:text-zinc-300 font-bold'
-              }`}
-              title={studioMode === 'live' ? 'लाइभ सुरु गर्नुहोस् (Start Face Live)' : 'क्यामेरा लाइभ मोडमा जानुहोस्'}
-            >
-              <div className="flex items-center gap-1">
-                <span className="flex h-2 w-2 rounded-full bg-rose-500 animate-pulse" />
-                <span className="text-xs sm:text-sm tracking-wider">FACE LIVE</span>
-              </div>
-              <span className="text-[9px] text-rose-300/80 font-medium">
-                {studioMode === 'live' ? '🔴 सुरु गर्नुहोस्' : 'क्यामेरा 🔴'}
-              </span>
-              {studioMode === 'live' && (
-                <span className="h-1 w-6 rounded-full bg-rose-500 mt-1 shadow-sm shadow-rose-500" />
-              )}
-            </button>
-
-            {/* Mode 3: PARTY LIVE */}
-            <button
-              type="button"
-              onClick={() => {
-                if (studioMode === 'voice_room') {
-                  // Direct 1-tap launch into Party Live Room View
-                  handleLaunchLive('voice');
-                } else {
-                  setStudioMode('voice_room');
-                }
-              }}
-              className={`flex flex-col items-center transition-all cursor-pointer shrink-0 ${
-                studioMode === 'voice_room'
-                  ? 'text-pink-400 scale-110 font-black'
-                  : 'text-zinc-500 hover:text-zinc-300 font-bold'
-              }`}
-              title={studioMode === 'voice_room' ? 'पार्टी लाइभ सुरु गर्नुहोस् (Start Party Live)' : 'भ्वाइस पार्टी मोडमा जानुहोस्'}
-            >
-              <div className="flex items-center gap-1">
-                <Headphones className="h-3 w-3" />
-                <span className="text-xs sm:text-sm tracking-wider">PARTY LIVE</span>
-              </div>
-              <span className="text-[9px] text-pink-300/80 font-medium">
-                {studioMode === 'voice_room' ? '🎉 सुरु गर्नुहोस्' : 'भ्वाइस पार्टी 🎉'}
-              </span>
-              {studioMode === 'voice_room' && (
-                <span className="h-1 w-6 rounded-full bg-pink-500 mt-1 shadow-sm shadow-pink-500" />
-              )}
-            </button>
-          </div>
-
-          {/* Right Shift Button */}
-          <button
-            type="button"
-            disabled={studioMode === 'voice_room'}
-            onClick={() => {
-              if (studioMode === 'video') setStudioMode('live');
-              else if (studioMode === 'live') setStudioMode('voice_room');
-            }}
-            className="h-8 w-8 rounded-full flex items-center justify-center text-zinc-400 hover:text-white disabled:opacity-20 disabled:pointer-events-none transition-all active:scale-95 shrink-0"
-            title="Next Mode"
-          >
-            <ChevronRight className="h-5 w-5" />
-          </button>
-        </div>
-
-        {/* Swipe / Scroll Guidance */}
-        <p className="text-[10px] text-zinc-500 font-medium pt-0.5">
-          👆 छुनुहोस् वा स्क्रोल/स्वाइप गर्नुहोस् • Scroll or tap to switch
-        </p>
-      </div>
 
       {/* =========================================================================
           SOUND EFFECTS & MUSIC LIBRARY MODAL

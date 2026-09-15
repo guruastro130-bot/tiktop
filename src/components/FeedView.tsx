@@ -224,25 +224,9 @@ export const FeedView: React.FC<FeedViewProps> = ({
       {/* Top Header Navigation: LIVE | Following | For You | Trending & Milestone Indicator */}
       <div className="absolute top-3 left-0 right-0 z-30 flex items-center justify-between px-3 sm:px-4 max-w-lg mx-auto pointer-events-none">
         
-        {/* Left Side: LIVE Stream Quick Entry Button */}
+        {/* Left Side: Ad Progress Badge (LIVE menu option removed per request) */}
         <div className="pointer-events-auto flex items-center gap-1.5">
-          {onOpenLive && (
-            <button
-              type="button"
-              onClick={onOpenLive}
-              className="flex items-center gap-1.5 rounded-full bg-rose-600/90 hover:bg-rose-600 px-2.5 py-1 text-[11px] font-black text-white shadow-lg backdrop-blur-md transition-all active:scale-95 cursor-pointer border border-white/20"
-              title="Watch & Join Live Streams"
-            >
-              <div className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-white" />
-              </div>
-              <span className="tracking-wide">LIVE</span>
-            </button>
-          )}
-
-          {/* Ad Progress Badge */}
-          <div className="hidden xs:flex items-center gap-1 rounded-full bg-black/40 px-2 py-1 text-[10px] font-medium text-white/80 backdrop-blur-md border border-white/10">
+          <div className="flex items-center gap-1 rounded-full bg-black/40 px-2 py-1 text-[10px] font-medium text-white/80 backdrop-blur-md border border-white/10">
             <Sparkles className="h-2.5 w-2.5 text-amber-400" />
             <span>{validWatchedCount}/{adSettings.fullscreenAdInterval}</span>
           </div>
@@ -319,36 +303,52 @@ export const FeedView: React.FC<FeedViewProps> = ({
         </div>
       </div>
 
-      {/* Top LIVE Creators Quick-Bar: Visible immediately on For You feed when creators are live */}
-      {activeTab === 'forYou' && activeLiveRooms.length > 0 && (
-        <div className="absolute top-13 left-0 right-0 z-20 px-3 flex items-center gap-2 overflow-x-auto no-scrollbar pointer-events-auto py-1 max-w-md mx-auto">
-          <span className="text-[10px] font-black text-rose-400 uppercase tracking-wider shrink-0 flex items-center gap-1 bg-black/60 px-2 py-1 rounded-full border border-rose-500/30">
-            <span className="h-1.5 w-1.5 rounded-full bg-rose-500 animate-ping" />
-            LIVE
-          </span>
+      {/* Top LIVE Friends & Creators Bar: Visible at top of Home feed whenever friends/creators are live */}
+      {activeLiveRooms.length > 0 && (
+        <div className="absolute top-13 sm:top-14 left-0 right-0 z-20 px-3 flex items-center gap-2 overflow-x-auto no-scrollbar pointer-events-auto py-1 max-w-lg mx-auto">
+          {/* Live indicator capsule */}
+          <div className="shrink-0 flex items-center gap-1.5 rounded-full bg-black/75 backdrop-blur-md px-2.5 py-1 border border-rose-500/40 shadow-lg">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500" />
+            </span>
+            <span className="text-[10px] font-black text-white tracking-wider uppercase">
+              Live Friends
+            </span>
+          </div>
 
+          {/* Horizontally scrollable live friends story capsules */}
           {activeLiveRooms.map(room => (
             <button
               key={room.id}
               type="button"
               onClick={() => onSelectLiveRoom?.(room)}
-              className="flex items-center gap-2 bg-black/60 backdrop-blur-md rounded-full pl-1 pr-3 py-1 border border-rose-500/50 hover:border-rose-400 hover:bg-black/80 transition-all active:scale-95 group shrink-0 shadow-lg cursor-pointer"
+              className="flex items-center gap-2 bg-black/75 backdrop-blur-md rounded-full pl-1 pr-3 py-1 border border-rose-500/50 hover:border-rose-400 hover:bg-black/90 transition-all active:scale-95 group shrink-0 shadow-xl cursor-pointer"
+              title={`${room.host.displayName} is LIVE now!`}
             >
-              <div className="relative">
+              {/* Creator Avatar with Animated Live Gradient Ring */}
+              <div className="relative p-[1.5px] rounded-full bg-gradient-to-tr from-rose-500 via-pink-500 to-amber-400 animate-pulse">
                 <img
                   src={room.host.avatarUrl}
                   alt={room.host.displayName}
-                  className="h-6 w-6 rounded-full object-cover ring-2 ring-rose-500 ring-offset-1 ring-offset-black"
+                  className="h-6 w-6 rounded-full object-cover border border-black"
                 />
-                <span className="absolute -bottom-0.5 -right-0.5 bg-rose-600 text-[7px] font-black text-white px-0.5 rounded-full leading-none">
-                  🔴
+                <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 bg-rose-600 text-[8px] font-black text-white px-1 rounded-full leading-tight uppercase shadow-sm">
+                  {room.type === 'voice' ? 'Party' : 'Live'}
                 </span>
               </div>
               <div className="text-left">
                 <p className="text-[11px] font-bold text-white leading-tight flex items-center gap-1">
-                  <span>{room.host.displayName}</span>
-                  <span className="text-[9px] text-rose-400 font-semibold font-mono">({room.viewerCount})</span>
+                  <span className="max-w-[80px] truncate">{room.host.displayName}</span>
+                  <span className="text-[9px] text-rose-400 font-bold font-mono">
+                    👁️ {room.viewerCount}
+                  </span>
                 </p>
+                {room.title && (
+                  <p className="text-[9px] text-zinc-400 max-w-[95px] truncate font-normal leading-none mt-0.5">
+                    {room.title}
+                  </p>
+                )}
               </div>
             </button>
           ))}

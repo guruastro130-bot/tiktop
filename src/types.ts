@@ -536,6 +536,7 @@ export interface LiveGift {
   name: string;
   nameNp: string;
   icon: string;
+  imageUrl?: string;
   coins: number;
   category: 'popular' | 'nepal' | 'luxury' | 'romantic' | 'greeting' | 'lucky';
   animation: 'rose' | 'confetti' | 'lion' | 'car' | 'crown' | 'fire' | 'topi' | 'khukuri' | 'kiss' | 'romantic_kiss' | 'hug' | 'love' | 'miss_you' | 'ring' | 'night' | 'coffee' | 'greeting';
@@ -554,6 +555,13 @@ export interface LiveMessage {
   gift?: LiveGift;
   targetSeatIndex?: number;
   createdAt: string;
+  luckyOutcome?: {
+    isWin: boolean;
+    winCoins: number;
+    multiplierLabel: string;
+    receiverPoints: number;
+    tier: string;
+  };
 }
 
 export interface LiveRoom {

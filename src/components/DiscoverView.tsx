@@ -17,9 +17,10 @@ import {
   Layers,
   ArrowUpDown,
   Filter,
-  Users
+  Users,
+  Radio,
 } from 'lucide-react';
-import { Video, User, SearchResults, DiscoverData, HashtagInfo } from '../types';
+import { Video, User, SearchResults, DiscoverData, HashtagInfo, LiveRoom } from '../types';
 import { useAuth } from '../context/AuthContext';
 
 interface DiscoverViewProps {
@@ -27,6 +28,9 @@ interface DiscoverViewProps {
   onSelectVideo: (video: Video) => void;
   onSelectCreator: (userId: string) => void;
   initialSearchQuery?: string;
+  liveRooms?: LiveRoom[];
+  onSelectLiveRoom?: (room: LiveRoom) => void;
+  onOpenGoLive?: () => void;
 }
 
 type SearchCategory = 'top' | 'videos' | 'users' | 'hashtags';
@@ -37,6 +41,9 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
   onSelectVideo,
   onSelectCreator,
   initialSearchQuery = '',
+  liveRooms = [],
+  onSelectLiveRoom,
+  onOpenGoLive,
 }) => {
   const { currentUser } = useAuth();
 
@@ -824,6 +831,127 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
           /* 3. DEFAULT DISCOVER FEED (TRENDING, POPULAR, CREATORS, TOPICS)            */
           /* ========================================================================= */
           <div className="space-y-6 animate-fadeIn">
+            {/* 🔥 TOP: Popular & Trending LIVE Streams */}
+            {liveRooms.filter(r => r.status === 'live').length > 0 && (
+              <div className="space-y-3 pb-2 border-b border-white/10">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-rose-500/20 text-rose-500 border border-rose-500/30">
+                      <Radio className="h-4 w-4 animate-pulse" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-black text-white flex items-center gap-1.5">
+                        <span>Popular & Trending LIVE</span>
+                        <span className="text-[10px] font-extrabold bg-rose-600 text-white px-1.5 py-0.5 rounded-full uppercase">
+                          🔴 Live ({liveRooms.filter(r => r.status === 'live').length})
+                        </span>
+                      </h3>
+                      <p className="text-[11px] text-zinc-400">
+                        प्रत्यक्ष प्रसारणमा जोडिनुहोस् र कुराकानी गर्नुहोस्
+                      </p>
+                    </div>
+                  </div>
+
+                  {onOpenGoLive && (
+                    <button
+                      type="button"
+                      onClick={onOpenGoLive}
+                      className="shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-full bg-rose-500/90 hover:bg-rose-600 text-white text-xs font-bold shadow-md shadow-rose-500/20 transition-all active:scale-95 cursor-pointer"
+                    >
+                      <Radio className="h-3.5 w-3.5" />
+                      <span>Go Live</span>
+                    </button>
+                  )}
+                </div>
+
+                {/* Horizontal Carousel of Live Cards */}
+                <div className="flex items-center gap-3 overflow-x-auto no-scrollbar pb-1 pt-1">
+                  {liveRooms
+                    .filter(r => r.status === 'live')
+                    .map(room => (
+                      <div
+                        key={room.id}
+                        onClick={() => onSelectLiveRoom?.(room)}
+                        className="group relative w-44 sm:w-52 shrink-0 aspect-3/4 overflow-hidden rounded-2xl bg-zinc-900 border border-white/10 hover:border-rose-500/60 transition-all cursor-pointer shadow-lg hover:shadow-rose-500/10"
+                      >
+                        {/* Background Image / Cover */}
+                        <img
+                          src={room.coverUrl || room.host.avatarUrl}
+                          alt={room.title}
+                          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/30 to-black/60" />
+
+                        {/* Top Badges */}
+                        <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between">
+                          <span className="flex items-center gap-1 rounded-full bg-rose-600/90 backdrop-blur-md px-2 py-0.5 text-[9px] font-black uppercase text-white shadow-md">
+                            <span className="h-1.5 w-1.5 rounded-full bg-white animate-ping" />
+                            {room.type === 'voice' ? 'Party' : 'LIVE'}
+                          </span>
+
+                          <span className="flex items-center gap-1 rounded-full bg-black/60 backdrop-blur-md px-2 py-0.5 text-[9px] font-bold text-white/90">
+                            <Eye className="h-3 w-3 text-rose-400" />
+                            <span>{formatNumber(room.viewerCount)}</span>
+                          </span>
+                        </div>
+
+                        {/* Category Tag if available */}
+                        {room.category && (
+                          <div className="absolute top-8 left-2.5 rounded-md bg-black/50 backdrop-blur-xs px-1.5 py-0.5 text-[9px] font-medium text-zinc-300">
+                            {room.category === 'nepal'
+                              ? '🇳🇵 नेपाल'
+                              : room.category === 'music'
+                              ? '🎵 संगीत'
+                              : room.category === 'gaming'
+                              ? '🎮 गेमिङ'
+                              : room.category === 'chat'
+                              ? '💬 च्याट'
+                              : room.category}
+                          </div>
+                        )}
+
+                        {/* Bottom Info: Host & Title & Diamonds */}
+                        <div className="absolute bottom-2.5 left-2.5 right-2.5 text-white space-y-1.5">
+                          <div className="flex items-center gap-2">
+                            <div className="relative shrink-0 p-[1px] rounded-full bg-gradient-to-tr from-rose-500 to-amber-400">
+                              <img
+                                src={room.host.avatarUrl}
+                                alt={room.host.displayName}
+                                className="h-6 w-6 rounded-full object-cover border border-black"
+                              />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-xs font-bold text-white truncate group-hover:text-rose-400 transition-colors flex items-center gap-1">
+                                <span>{room.host.displayName}</span>
+                                {room.host.isVerified && (
+                                  <span className="flex h-3 w-3 items-center justify-center rounded-full bg-sky-500 text-[7px] text-white">
+                                    ✓
+                                  </span>
+                                )}
+                              </p>
+                              <p className="text-[10px] text-zinc-400 truncate">@{room.host.username}</p>
+                            </div>
+                          </div>
+
+                          <p className="text-[11px] font-semibold text-zinc-200 line-clamp-1 leading-snug">
+                            {room.title}
+                          </p>
+
+                          <div className="flex items-center justify-between text-[10px] text-zinc-400 pt-0.5">
+                            <span className="flex items-center gap-0.5 text-amber-300 font-semibold">
+                              💎 {formatNumber(room.diamondCount || 0)}
+                            </span>
+                            <span className="text-rose-400 font-bold group-hover:translate-x-0.5 transition-transform flex items-center gap-0.5">
+                              Join →
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
+
             {/* Discover Sub-Tabs */}
             <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
               {(

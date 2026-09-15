@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Coins, Sparkles, Send, PlusCircle, Heart, Users, Check } from 'lucide-react';
+import { X, Coins, Sparkles, Send, PlusCircle, Users, ChevronDown, Check } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { LiveGift, LiveSeat } from '../../types';
 import { LIVE_GIFTS } from '../../data/liveData';
@@ -7,6 +7,7 @@ import { liveAudio } from '../../utils/liveAudio';
 import { useAuth } from '../../context/AuthContext';
 import { LuckyGiftSystem } from '../LuckyGiftSystem';
 import { CoinRechargeModal } from '../CoinRechargeModal';
+import { calculateLuckyGiftResult, LuckyGiftOutcome } from '../../utils/luckyGiftEngine';
 
 interface LiveGiftModalProps {
   isOpen: boolean;
@@ -14,7 +15,7 @@ interface LiveGiftModalProps {
   seats: LiveSeat[];
   hostName: string;
   hostAvatar?: string;
-  onSendGift: (gift: LiveGift, targetSeatIndex?: number) => void;
+  onSendGift: (gift: LiveGift, targetSeatIndex?: number | 'all', multiplier?: number, luckyOutcome?: LuckyGiftOutcome) => void;
   initialCategory?: 'all' | 'popular' | 'romantic' | 'greeting' | 'nepal' | 'luxury' | 'lucky';
   initialTargetSeat?: number | 'host' | 'all';
 }
@@ -36,7 +37,9 @@ export const LiveGiftModal: React.FC<LiveGiftModalProps> = ({
   const [giftMultiplier, setGiftMultiplier] = useState<number>(1);
   const [isRechargeModalOpen, setIsRechargeModalOpen] = useState(false);
   const [floatingDeduction, setFloatingDeduction] = useState<number | null>(null);
+  const [luckyToast, setLuckyToast] = useState<LuckyGiftOutcome | null>(null);
   const [showJackpotMachine, setShowJackpotMachine] = useState<boolean>(false);
+  const [isRecipientMenuOpen, setIsRecipientMenuOpen] = useState<boolean>(false);
 
   const [coinBalance, setCoinBalance] = useState<number>(() => {
     if (currentUser?.coinBalance !== undefined) return currentUser.coinBalance;
@@ -69,7 +72,6 @@ export const LiveGiftModal: React.FC<LiveGiftModalProps> = ({
     return g.category === selectedCategory;
   });
 
-  // Calculate occupied recipients count if 'all' seats selected
   const safeSeats = Array.isArray(seats) ? seats : [];
   const occupiedSeats = safeSeats.filter(s => s.user);
   const allRecipientsCount = Math.max(1, (occupiedSeats.length > 0 ? occupiedSeats.length : 1));
@@ -77,8 +79,18 @@ export const LiveGiftModal: React.FC<LiveGiftModalProps> = ({
   const totalCost = (selectedGift?.coins || 0) * giftMultiplier * multiplierFactor;
   const isInsufficient = coinBalance < totalCost;
 
-  const handleRechargeSuccess = (addedCoins: number, newBalance: number) => {
+  const handleRechargeSuccess = (_addedCoins: number, newBalance: number) => {
     setCoinBalance(newBalance);
+  };
+
+  const getRecipientLabel = () => {
+    if (selectedTargetSeat === 'host') return `👑 ${hostName} (Host)`;
+    if (selectedTargetSeat === 'all') return `🌟 All Seats (${occupiedSeats.length})`;
+    const targetSeat = safeSeats.find(s => s.seatIndex === selectedTargetSeat);
+    if (targetSeat?.user) {
+      return `Seat ${targetSeat.seatIndex + 1}: ${targetSeat.user.displayName}`;
+    }
+    return `Seat ${(selectedTargetSeat as number) + 1}`;
   };
 
   const handleSend = () => {
@@ -89,8 +101,17 @@ export const LiveGiftModal: React.FC<LiveGiftModalProps> = ({
       return;
     }
 
-    // Deduct coins & show floating deduction animation
-    const newBal = Math.max(0, coinBalance - totalCost);
+    const isLucky = Boolean(selectedGift.isLucky || selectedGift.category === 'lucky');
+    let luckyOutcome: LuckyGiftOutcome | undefined;
+
+    if (isLucky) {
+      // Calculate lucky cashback & recipient 3% points
+      luckyOutcome = calculateLuckyGiftResult(totalCost);
+    }
+
+    // New balance calculation: Deduct totalCost, and if won, add winCoins back immediately!
+    const winBonus = (isLucky && luckyOutcome?.isWin) ? luckyOutcome.winCoins : 0;
+    const newBal = Math.max(0, coinBalance - totalCost + winBonus);
     setCoinBalance(newBal);
     if (updateUserCoins) {
       updateUserCoins(newBal);
@@ -102,51 +123,72 @@ export const LiveGiftModal: React.FC<LiveGiftModalProps> = ({
     setFloatingDeduction(totalCost);
     setTimeout(() => setFloatingDeduction(null), 1200);
 
-    // Audio sound mapping
-    const anim = selectedGift.animation;
-    if (anim === 'kiss' || anim === 'romantic_kiss') {
-      liveAudio.playGiftSound('kiss');
-    } else if (anim === 'love' || anim === 'miss_you') {
-      liveAudio.playGiftSound('love');
-    } else if (anim === 'hug' || anim === 'coffee') {
-      liveAudio.playGiftSound('hug');
-    } else if (anim === 'ring' || anim === 'crown' || anim === 'car' || anim === 'lion') {
-      liveAudio.playGiftSound('luxury');
-    } else if (anim === 'night') {
-      liveAudio.playGiftSound('night');
-    } else if (selectedGift.category === 'nepal') {
-      liveAudio.playGiftSound('nepal');
-    } else {
-      liveAudio.playGiftSound('rose');
-    }
+    if (isLucky && luckyOutcome) {
+      setLuckyToast(luckyOutcome);
+      setTimeout(() => setLuckyToast(null), 3800);
 
-    if (selectedGift.coins >= 500 || giftMultiplier > 1 || selectedTargetSeat === 'all') {
-      confetti({
-        particleCount: selectedGift.coins >= 5000 || selectedTargetSeat === 'all' ? 120 : 60,
-        spread: 80,
-        origin: { y: 0.65 },
-      });
-    }
-
-    // Send gift to recipient(s)
-    if (selectedTargetSeat === 'all') {
-      // Send to host and all seated guests
-      onSendGift(selectedGift, 0); // Host
-      occupiedSeats.forEach(s => {
-        if (s.seatIndex !== 0) {
-          onSendGift(selectedGift, s.seatIndex);
+      if (luckyOutcome.isWin) {
+        if (luckyOutcome.winCoins >= 1000) {
+          liveAudio.playLuckySound('jackpot');
+          confetti({
+            particleCount: 140,
+            spread: 90,
+            origin: { y: 0.6 },
+            colors: ['#ffd700', '#fbbf24', '#f43f5e', '#ffffff'],
+          });
+        } else if (luckyOutcome.winCoins >= totalCost) {
+          liveAudio.playLuckySound('win');
+          confetti({
+            particleCount: 60,
+            spread: 60,
+            origin: { y: 0.65 },
+            colors: ['#34d399', '#fbbf24', '#f43f5e'],
+          });
+        } else {
+          liveAudio.playLuckySound('coin');
         }
-      });
+      } else {
+        liveAudio.playLuckySound('loss');
+      }
     } else {
-      for (let i = 0; i < Math.min(giftMultiplier, 3); i++) {
-        onSendGift(
-          selectedGift,
-          selectedTargetSeat === 'host' ? 0 : typeof selectedTargetSeat === 'number' ? selectedTargetSeat : 0
-        );
+      const anim = selectedGift.animation;
+      if (anim === 'kiss' || anim === 'romantic_kiss') {
+        liveAudio.playGiftSound('kiss');
+      } else if (anim === 'love' || anim === 'miss_you') {
+        liveAudio.playGiftSound('love');
+      } else if (anim === 'hug' || anim === 'coffee') {
+        liveAudio.playGiftSound('hug');
+      } else if (anim === 'ring' || anim === 'crown' || anim === 'car' || anim === 'lion') {
+        liveAudio.playGiftSound('luxury');
+      } else if (anim === 'night') {
+        liveAudio.playGiftSound('night');
+      } else if (selectedGift.category === 'nepal') {
+        liveAudio.playGiftSound('nepal');
+      } else {
+        liveAudio.playGiftSound('rose');
+      }
+
+      if (selectedGift.coins >= 500 || giftMultiplier > 1 || selectedTargetSeat === 'all') {
+        confetti({
+          particleCount: selectedGift.coins >= 5000 || selectedTargetSeat === 'all' ? 100 : 50,
+          spread: 70,
+          origin: { y: 0.65 },
+          colors: ['#f43f5e', '#fbbf24', '#ec4899', '#ffffff'],
+        });
       }
     }
 
-    // Record gift transaction to backend
+    if (selectedTargetSeat === 'all') {
+      onSendGift(selectedGift, 'all', giftMultiplier, luckyOutcome);
+    } else {
+      onSendGift(
+        selectedGift,
+        selectedTargetSeat === 'host' ? 0 : typeof selectedTargetSeat === 'number' ? selectedTargetSeat : 0,
+        giftMultiplier,
+        luckyOutcome
+      );
+    }
+
     try {
       fetch('/api/live/send-gift', {
         method: 'POST',
@@ -158,65 +200,37 @@ export const LiveGiftModal: React.FC<LiveGiftModalProps> = ({
           creatorId: 'creator_B',
           giftName: selectedGift.name,
           giftPrice: totalCost,
-          roomId: 'live_voice_1'
-        })
+          roomId: 'live_voice_1',
+        }),
       }).catch(() => {});
     } catch (_) {}
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col justify-end bg-transparent pointer-events-auto select-none animate-fade-in">
-      {/* Transparent upper area so user can see host and tap video to dismiss */}
-      <div className="flex-1 w-full cursor-pointer bg-transparent" onClick={onClose} />
+    <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/35 backdrop-blur-[2px] pointer-events-auto select-none transition-opacity duration-200">
+      {/* Click-outside backdrop to dismiss modal & keep video visible */}
+      <div className="flex-1 w-full cursor-pointer" onClick={onClose} />
 
-      {/* Floating Host Live Glance Pill (Allows gifter to clearly see the Host Face & Live status) */}
-      <div className="w-full max-w-lg mx-auto px-4 pb-1.5 flex items-center justify-between pointer-events-none">
-        <div className="flex items-center gap-2 rounded-full bg-black/85 border border-rose-500/50 px-2.5 py-1 backdrop-blur-md shadow-xl pointer-events-auto">
-          <div className="relative">
-            <img
-              src={hostAvatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100'}
-              alt={hostName}
-              className="h-6 w-6 rounded-full object-cover border border-rose-500"
-            />
-            <span className="absolute -bottom-0.5 -right-0.5 flex h-2 w-2 rounded-full bg-emerald-500 ring-1 ring-black" />
-          </div>
-          <span className="text-[11px] font-black text-white truncate max-w-[120px]">
-            {hostName}
-          </span>
-          <span className="flex items-center gap-1 text-[9px] text-rose-300 font-bold bg-rose-500/20 border border-rose-500/40 px-1.5 py-0.2 rounded-full">
-            <span className="h-1.5 w-1.5 rounded-full bg-rose-500 animate-ping inline-block" />
-            <span>होस्ट प्रत्यक्ष 🔴</span>
-          </span>
-        </div>
-
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded-full bg-black/85 border border-white/20 p-1.5 text-zinc-300 hover:text-white backdrop-blur-md pointer-events-auto shadow-md transition-colors cursor-pointer active:scale-95"
-          title="बन्द गर्नुहोस् (Close)"
-        >
-          <X className="h-4 w-4" />
-        </button>
-      </div>
-
+      {/* Slide-Up Floating Gift Tray (Poppo Live Style) */}
       <div
         onClick={e => e.stopPropagation()}
-        className="w-full max-w-lg mx-auto max-h-[35vh] sm:max-h-[38vh] rounded-t-3xl border-t border-amber-500/40 bg-zinc-950/90 p-2.5 sm:p-3 text-white shadow-[0_-10px_35px_rgba(0,0,0,0.85)] space-y-1.5 backdrop-blur-xl flex flex-col overflow-hidden animate-slide-up"
+        className="w-full max-w-lg mx-auto rounded-t-[28px] border-t border-white/10 bg-zinc-950/85 backdrop-blur-2xl shadow-[0_-12px_36px_rgba(0,0,0,0.85)] text-white flex flex-col max-h-[48vh] sm:max-h-[46vh] transition-transform duration-300 animate-slide-up overflow-hidden"
       >
-        
-        {/* Header with Coin Balance & Quick Recharge */}
-        <div className="flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-2">
-            <div className="relative flex items-center gap-1.5 rounded-full bg-gradient-to-r from-amber-500/25 to-yellow-500/20 border border-amber-500/40 px-2.5 py-0.5 shadow-xs">
-              <Coins className="h-3.5 w-3.5 text-amber-400 animate-pulse" />
-              <span className="text-xs font-black text-amber-300 font-mono tracking-tight">
-                {coinBalance.toLocaleString()} Coins
-              </span>
+        {/* Sleek Top Drag Handle Indicator */}
+        <div className="pt-2 pb-1 flex justify-center shrink-0">
+          <div className="h-1 w-10 rounded-full bg-white/20" />
+        </div>
 
-              {/* Floating coin deduction bubble */}
+        {/* Top Minimalist Navigation Bar */}
+        <div className="px-3 py-1.5 flex items-center justify-between gap-2 border-b border-white/5 shrink-0">
+          {/* Coin Balance & Quick Recharge */}
+          <div className="flex items-center gap-1.5">
+            <div className="relative flex items-center gap-1.5 rounded-full bg-white/5 border border-amber-500/30 px-2.5 py-1 text-xs font-mono font-bold text-amber-300">
+              <Coins className="h-3.5 w-3.5 text-amber-400" />
+              <span>{coinBalance.toLocaleString()}</span>
               {floatingDeduction !== null && (
-                <span className="absolute -top-3 right-0 -translate-y-1 text-[10px] font-black text-rose-400 bg-black/90 px-1.5 py-0.5 rounded-full border border-rose-500/40 animate-bounce shadow-md">
-                  -{floatingDeduction.toLocaleString()} 🪙
+                <span className="absolute -top-3 right-0 text-[10px] font-black text-rose-400 bg-zinc-900 px-1.5 py-0.5 rounded-full border border-rose-500/40 animate-bounce shadow">
+                  -{floatingDeduction.toLocaleString()}
                 </span>
               )}
             </div>
@@ -224,86 +238,106 @@ export const LiveGiftModal: React.FC<LiveGiftModalProps> = ({
             <button
               type="button"
               onClick={() => setIsRechargeModalOpen(true)}
-              className="flex items-center gap-1 rounded-full bg-gradient-to-r from-amber-500 to-yellow-400 text-black px-2.5 py-0.5 text-[10px] font-black shadow-md hover:brightness-110 transition-all active:scale-95 cursor-pointer"
-              title="रिचार्ज गर्नुहोस् (Recharge Coins)"
+              className="flex items-center gap-1 rounded-full bg-amber-400 hover:bg-amber-300 text-black px-2.5 py-1 text-[11px] font-bold shadow transition-transform active:scale-95 cursor-pointer"
+              title="Coins Recharge"
             >
               <PlusCircle className="h-3 w-3 stroke-[2.5]" />
-              <span>+ रिचार्ज</span>
+              <span>रिचार्ज</span>
             </button>
           </div>
 
+          {/* Recipient Dropdown Chip */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setIsRecipientMenuOpen(prev => !prev)}
+              className="flex items-center gap-1.5 rounded-full bg-white/5 border border-white/10 px-2.5 py-1 text-[11px] font-semibold text-zinc-200 hover:border-white/20 transition-all cursor-pointer"
+            >
+              <span className="truncate max-w-[120px]">{getRecipientLabel()}</span>
+              <ChevronDown className={`h-3 w-3 text-zinc-400 transition-transform ${isRecipientMenuOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {/* Recipient Dropdown Popup */}
+            {isRecipientMenuOpen && (
+              <div className="absolute right-0 bottom-full mb-1.5 w-48 rounded-2xl border border-white/10 bg-zinc-900/95 p-1 shadow-2xl backdrop-blur-xl z-50 space-y-0.5 animate-fade-in">
+                <div className="px-2 py-1 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                  उपहार पाउने व्यक्ति छान्नुहोस्
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedTargetSeat('host');
+                    setIsRecipientMenuOpen(false);
+                  }}
+                  className={`w-full flex items-center justify-between rounded-xl px-2.5 py-1.5 text-xs font-semibold transition-colors ${
+                    selectedTargetSeat === 'host' ? 'bg-rose-500/20 text-rose-300' : 'text-zinc-200 hover:bg-white/5'
+                  }`}
+                >
+                  <span className="truncate">👑 {hostName} (Host)</span>
+                  {selectedTargetSeat === 'host' && <Check className="h-3.5 w-3.5 text-rose-400" />}
+                </button>
+
+                {occupiedSeats.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedTargetSeat('all');
+                      setIsRecipientMenuOpen(false);
+                    }}
+                    className={`w-full flex items-center justify-between rounded-xl px-2.5 py-1.5 text-xs font-semibold transition-colors ${
+                      selectedTargetSeat === 'all' ? 'bg-purple-500/20 text-purple-300' : 'text-zinc-200 hover:bg-white/5'
+                    }`}
+                  >
+                    <span className="flex items-center gap-1">
+                      <Users className="h-3 w-3" />
+                      <span>सबै सिट ({occupiedSeats.length})</span>
+                    </span>
+                    {selectedTargetSeat === 'all' && <Check className="h-3.5 w-3.5 text-purple-400" />}
+                  </button>
+                )}
+
+                {seats
+                  .filter(s => s.user && s.seatIndex !== 0)
+                  .map(s => (
+                    <button
+                      key={s.seatIndex}
+                      type="button"
+                      onClick={() => {
+                        setSelectedTargetSeat(s.seatIndex);
+                        setIsRecipientMenuOpen(false);
+                      }}
+                      className={`w-full flex items-center justify-between rounded-xl px-2.5 py-1.5 text-xs font-semibold transition-colors ${
+                        selectedTargetSeat === s.seatIndex ? 'bg-rose-500/20 text-rose-300' : 'text-zinc-200 hover:bg-white/5'
+                      }`}
+                    >
+                      <span className="truncate">सिट {s.seatIndex + 1}: {s.user?.displayName}</span>
+                      {selectedTargetSeat === s.seatIndex && <Check className="h-3.5 w-3.5 text-rose-400" />}
+                    </button>
+                  ))}
+              </div>
+            )}
+          </div>
+
+          {/* Close Button */}
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full bg-zinc-800/90 p-1 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+            className="rounded-full bg-white/5 p-1 text-zinc-400 hover:text-white transition-colors cursor-pointer"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
 
-        {/* Target Recipient Selector (Host, All Seats, or Specific Seated Guest) */}
-        <div className="flex items-center gap-1.5 overflow-x-auto py-0.5 no-scrollbar border-b border-white/10 pb-1.5 shrink-0">
-          <span className="text-[9.5px] font-black text-zinc-400 shrink-0">उपहार पाउने:</span>
-          
-          {/* Host Button */}
-          <button
-            type="button"
-            onClick={() => setSelectedTargetSeat('host')}
-            className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-bold transition-all shrink-0 cursor-pointer ${
-              selectedTargetSeat === 'host'
-                ? 'bg-amber-500 text-black shadow-md font-black ring-1 ring-amber-300'
-                : 'bg-zinc-800 text-zinc-300 border border-white/10 hover:border-white/25'
-            }`}
-          >
-            <span>👑 {hostName} (Host)</span>
-          </button>
-
-          {/* All Seats / Multi-seat option */}
-          {occupiedSeats.length > 1 && (
-            <button
-              type="button"
-              onClick={() => setSelectedTargetSeat('all')}
-              className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-bold transition-all shrink-0 cursor-pointer ${
-                selectedTargetSeat === 'all'
-                  ? 'bg-gradient-to-r from-purple-500 to-indigo-500 text-white shadow-md font-black ring-1 ring-purple-300'
-                  : 'bg-zinc-800 text-purple-300 border border-purple-500/30 hover:border-purple-400'
-              }`}
-              title="सबै सिटहरूमा बसेकाहरूलाई एकै पटक पठाउनुहोस्"
-            >
-              <Users className="h-3 w-3" />
-              <span>🌟 सबै सिट ({occupiedSeats.length})</span>
-            </button>
-          )}
-
-          {/* Seated Guests */}
-          {seats
-            .filter(s => s.user && s.seatIndex !== 0)
-            .map(s => (
-              <button
-                key={s.seatIndex}
-                type="button"
-                onClick={() => setSelectedTargetSeat(s.seatIndex)}
-                className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-bold transition-all shrink-0 cursor-pointer ${
-                  selectedTargetSeat === s.seatIndex
-                    ? 'bg-rose-500 text-white shadow-md font-black ring-1 ring-rose-300'
-                    : 'bg-zinc-800 text-zinc-300 border border-white/10 hover:border-white/25'
-                }`}
-              >
-                <span>सिट {s.seatIndex + 1}: {s.user?.displayName}</span>
-              </button>
-            ))}
-        </div>
-
-        {/* Gift Categories Tab */}
-        <div className="flex items-center gap-1 overflow-x-auto pb-1 text-xs no-scrollbar shrink-0">
+        {/* Minimalist Categories Filter Bar */}
+        <div className="px-3 py-1.5 flex items-center gap-1.5 overflow-x-auto no-scrollbar border-b border-white/5 shrink-0">
           {[
-            { id: 'all', label: '🌟 सबै' },
-            { id: 'popular', label: '🔥 लोकप्रिय' },
+            { id: 'all', label: 'सबै' },
+            { id: 'popular', label: 'लोकप्रिय' },
             { id: 'lucky', label: '🎰 लक्की' },
             { id: 'nepal', label: '🇳🇵 नेपाल' },
-            { id: 'romantic', label: '❤️ माया' },
+            { id: 'romantic', label: 'माया' },
             { id: 'luxury', label: '👑 VIP' },
-            { id: 'greeting', label: '👋 अभिवादन' },
+            { id: 'greeting', label: 'अभिवादन' },
           ].map(tab => (
             <button
               key={tab.id}
@@ -314,12 +348,10 @@ export const LiveGiftModal: React.FC<LiveGiftModalProps> = ({
                   setShowJackpotMachine(false);
                 }
               }}
-              className={`rounded-full px-2.5 py-0.5 font-bold whitespace-nowrap transition-all text-[10px] ${
+              className={`rounded-full px-3 py-0.5 text-[11px] font-medium whitespace-nowrap transition-all cursor-pointer ${
                 selectedCategory === tab.id
-                  ? tab.id === 'lucky'
-                    ? 'bg-gradient-to-r from-amber-500 to-yellow-400 text-black shadow-md shadow-amber-500/30'
-                    : 'bg-gradient-to-r from-rose-500 to-pink-500 text-white shadow-md'
-                  : 'bg-zinc-900 text-zinc-400 hover:text-white border border-white/5'
+                  ? 'bg-rose-500 text-white font-bold shadow-sm'
+                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5'
               }`}
             >
               {tab.label}
@@ -327,34 +359,67 @@ export const LiveGiftModal: React.FC<LiveGiftModalProps> = ({
           ))}
         </div>
 
+        {/* Lucky Category Sub-banner */}
         {selectedCategory === 'lucky' && (
-          <div className="flex items-center justify-between gap-2 bg-amber-500/10 border border-amber-500/30 p-1.5 rounded-xl text-xs shrink-0">
-            <span className="text-[10px] text-amber-300 font-bold px-1 flex items-center gap-1">
-              <span>🎰</span>
-              <span>५००x सम्म जित्न सकिने उपहार</span>
-            </span>
+          <div className="px-3 py-1.5 flex items-center justify-between bg-gradient-to-r from-amber-500/15 via-rose-500/10 to-amber-500/15 border-b border-amber-500/25 text-xs shrink-0">
+            <div className="flex items-center gap-1.5 min-w-0 pr-1">
+              <span className="text-base shrink-0 animate-bounce">🎰</span>
+              <div className="min-w-0">
+                <span className="text-[10px] text-amber-300 font-bold block leading-tight truncate">
+                  १०० कोइनमा १२०, १३५, २००, ५२५, ११२३, १८९० देखि ५,००० सम्म ब्याक!
+                </span>
+                <span className="text-[9px] text-zinc-300 font-medium block leading-tight">
+                  रिसिभर (Host/Guest) ले ठीक ३% पोइन्ट्स प्राप्त गर्ने
+                </span>
+              </div>
+            </div>
             <button
               type="button"
               onClick={() => setShowJackpotMachine(prev => !prev)}
-              className="rounded-lg bg-gradient-to-r from-amber-500 to-yellow-400 text-black px-2 py-0.5 text-[9.5px] font-black hover:brightness-110 active:scale-95 transition-all shadow-xs shrink-0 cursor-pointer"
+              className="rounded-full bg-amber-400 text-black px-2.5 py-1 text-[10px] font-black hover:bg-amber-300 transition-all cursor-pointer shrink-0 shadow-sm"
             >
-              {showJackpotMachine ? '🎁 उपहारहरू' : '🎰 स्पिन खोल्नुहोस्'}
+              {showJackpotMachine ? 'उपहार सूची' : 'स्पिन ह्विल 🎰'}
             </button>
           </div>
         )}
 
+        {/* Floating Lucky Feedback Toast inside Modal */}
+        {luckyToast && (
+          <div className="absolute top-12 inset-x-3 z-50 pointer-events-none flex items-center justify-center animate-bounce">
+            <div className={`flex items-center gap-2.5 rounded-2xl px-4 py-2 text-xs shadow-2xl backdrop-blur-xl border ${
+              luckyToast.isWin
+                ? 'bg-gradient-to-r from-amber-600 via-rose-600 to-amber-700 text-white border-amber-300 shadow-[0_0_30px_rgba(251,191,36,0.6)]'
+                : 'bg-zinc-900/95 text-zinc-300 border-white/20'
+            }`}>
+              <span className="text-2xl">{luckyToast.isWin ? '🎉' : '🍀'}</span>
+              <div>
+                <div className="flex items-center gap-1.5 font-black text-[11.5px]">
+                  <span>{luckyToast.isWin ? `+${luckyToast.winCoins.toLocaleString()} COINS BACK!` : 'अर्को पटक अवश्य भाग्य खुल्नेछ!'}</span>
+                  {luckyToast.isWin && (
+                    <span className="rounded-full bg-black/40 px-1.5 py-0.2 text-[9px] text-amber-300 font-extrabold">
+                      {luckyToast.multiplierLabel}
+                    </span>
+                  )}
+                </div>
+                <p className="text-[9.5px] opacity-90 text-white/90">
+                  {luckyToast.isWin
+                    ? `तपाईंको ब्यालेन्समा थपियो! (रिसिभरले +${luckyToast.receiverPoints} पोइन्ट पाए)`
+                    : `रिसिभर (Host/Guest) ले +${luckyToast.receiverPoints} पोइन्ट प्राप्त गर्नुभयो`}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Gift Selection Area */}
         {selectedCategory === 'lucky' && showJackpotMachine ? (
-          <div className="flex-1 overflow-y-auto pr-1 min-h-0">
+          <div className="flex-1 overflow-y-auto px-3 py-2 min-h-0">
             <LuckyGiftSystem
               userBalance={coinBalance}
               onBalanceChange={(newBal) => {
                 setCoinBalance(newBal);
-                if (updateUserCoins) {
-                  updateUserCoins(newBal);
-                }
-                if (updateUserPoints) {
-                  updateUserPoints(newBal * 100);
-                }
+                if (updateUserCoins) updateUserCoins(newBal);
+                if (updateUserPoints) updateUserPoints(newBal * 100);
               }}
               creatorName={hostName}
               onSendToCreator={(earnings, giftName) => {
@@ -367,14 +432,14 @@ export const LiveGiftModal: React.FC<LiveGiftModalProps> = ({
                   category: 'lucky',
                   animation: 'confetti',
                   isLucky: true,
-                  emotionTag: '🎰 लक्की ज्याकपट उपहार',
+                  emotionTag: '🎰 लक्की ज्याकपट',
                 }, selectedTargetSeat === 'host' ? 0 : typeof selectedTargetSeat === 'number' ? selectedTargetSeat : 0);
               }}
             />
           </div>
         ) : (
-          /* Compact Gifts Grid */
-          <div className="grid grid-cols-4 gap-1.5 flex-1 overflow-y-auto pr-1 min-h-0">
+          /* Sleek 4-Column Gifts Grid */
+          <div className="grid grid-cols-4 gap-1.5 p-2.5 flex-1 overflow-y-auto min-h-0 no-scrollbar">
             {filteredGifts.map(gift => {
               const isSelected = selectedGift.id === gift.id;
               return (
@@ -382,28 +447,36 @@ export const LiveGiftModal: React.FC<LiveGiftModalProps> = ({
                   key={gift.id}
                   onClick={() => {
                     setSelectedGift(gift);
-                    if (gift.isLucky) {
-                      setSelectedCategory('lucky');
-                    }
+                    if (gift.isLucky) setSelectedCategory('lucky');
                   }}
-                  className={`relative flex flex-col items-center justify-center p-1.5 rounded-xl border transition-all cursor-pointer ${
+                  className={`relative flex flex-col items-center justify-center p-2 rounded-2xl transition-all cursor-pointer select-none ${
                     isSelected
-                      ? 'border-rose-500 bg-rose-500/20 shadow-md scale-[1.02] ring-1 ring-rose-500/50'
-                      : gift.isLucky
-                      ? 'border-amber-500/40 bg-gradient-to-b from-amber-500/10 to-zinc-900/90 hover:border-amber-400'
-                      : 'border-white/10 bg-zinc-900/90 hover:bg-zinc-800/80 hover:border-white/20'
+                      ? 'bg-white/10 border border-rose-500/80 shadow-[0_0_15px_rgba(244,63,94,0.35)] scale-[1.02]'
+                      : 'bg-white/[0.03] hover:bg-white/[0.07] border border-white/5 hover:border-white/15'
                   }`}
                 >
-                  {gift.isLucky && (
-                    <span className="absolute -top-1 -right-0.5 rounded-full bg-gradient-to-r from-amber-500 to-yellow-400 text-black px-1 py-0.2 text-[7px] font-black uppercase shadow-xs">
-                      🎰 Lucky
+                  {/* Subtle Badge */}
+                  {gift.isLucky ? (
+                    <span className="absolute top-1 right-1 rounded-full bg-amber-400 text-black px-1 text-[7px] font-black uppercase">
+                      Lucky
                     </span>
+                  ) : gift.coins >= 50000 ? (
+                    <span className="absolute top-1 right-1 rounded-full bg-amber-300 text-black px-1 text-[6.5px] font-black uppercase">
+                      VIP
+                    </span>
+                  ) : null}
+
+                  {gift.imageUrl ? (
+                    <div className="h-8 w-8 mb-1 flex items-center justify-center overflow-hidden rounded-md border border-amber-400/50 shadow-sm bg-black/40">
+                      <img src={gift.imageUrl} alt={gift.nameNp} className="h-full w-full object-cover" />
+                    </div>
+                  ) : (
+                    <span className="text-2xl filter drop-shadow-sm mb-1">{gift.icon}</span>
                   )}
-                  <span className="text-2xl filter drop-shadow-sm mb-0.5">{gift.icon}</span>
-                  <p className="text-[10px] font-extrabold text-white truncate max-w-full text-center leading-tight">
+                  <p className="text-[11px] font-medium text-zinc-200 truncate max-w-full text-center">
                     {gift.nameNp}
                   </p>
-                  <div className="mt-0.5 flex items-center gap-0.5 text-amber-400 font-black text-[10px]">
+                  <div className="mt-0.5 flex items-center gap-0.5 text-amber-400 font-bold text-[10px]">
                     <Coins className="h-2.5 w-2.5" />
                     <span>{gift.coins.toLocaleString()}</span>
                   </div>
@@ -413,79 +486,64 @@ export const LiveGiftModal: React.FC<LiveGiftModalProps> = ({
           </div>
         )}
 
-        {/* Multiplier Presets & Send Action Footer */}
-        {selectedCategory !== 'lucky' && (
-          <div className="pt-1.5 border-t border-white/10 space-y-1.5 shrink-0">
-            
-            {/* Multiplier Combo Selector */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1 text-[10px] text-zinc-300 font-bold">
-                <Sparkles className="h-3 w-3 text-amber-400" />
-                <span>कम्बो (Qty):</span>
-              </div>
-              <div className="flex items-center gap-1">
-                {[1, 5, 10, 99].map(num => (
-                  <button
-                    key={num}
-                    type="button"
-                    onClick={() => setGiftMultiplier(num)}
-                    className={`rounded-full px-2 py-0.2 text-[9.5px] font-black transition-all cursor-pointer ${
-                      giftMultiplier === num
-                        ? 'bg-amber-400 text-black shadow-sm'
-                        : 'bg-zinc-800 text-zinc-400 hover:text-white border border-white/5'
-                    }`}
-                  >
-                    x{num}
-                  </button>
-                ))}
-              </div>
+        {/* Compact Poppo-Style Bottom Control Bar (Always visible for gifts list) */}
+        {!showJackpotMachine && (
+          <div className="px-3 py-2 border-t border-white/10 bg-black/60 backdrop-blur-md flex items-center justify-between gap-2 shrink-0">
+            {/* Combo Multipliers */}
+            <div className="flex items-center gap-1">
+              {[1, 5, 10, 99].map(num => (
+                <button
+                  key={num}
+                  type="button"
+                  onClick={() => setGiftMultiplier(num)}
+                  className={`rounded-full px-2 py-0.5 text-[10px] font-bold transition-all cursor-pointer ${
+                    giftMultiplier === num
+                      ? 'bg-white/20 text-white border border-white/30'
+                      : 'bg-white/5 text-zinc-400 hover:text-white border border-transparent'
+                  }`}
+                >
+                  x{num}
+                </button>
+              ))}
             </div>
 
-            {/* Send / Recharge CTA Bar */}
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-1.5 min-w-0">
-                <span className="text-xl filter drop-shadow">{selectedGift.icon}</span>
-                <div className="truncate">
-                  <div className="flex items-center gap-1">
-                    <p className="text-[11px] font-extrabold text-white truncate">{selectedGift.nameNp}</p>
-                    {giftMultiplier > 1 && (
-                      <span className="text-[9px] font-black text-amber-400 bg-amber-400/15 px-1 py-0.2 rounded-full border border-amber-400/30">
-                        x{giftMultiplier}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-[9.5px] text-amber-400 font-bold leading-tight">
-                    कुल: {totalCost.toLocaleString()} Coins
-                  </p>
-                </div>
+            {/* Total Cost & Send CTA */}
+            <div className="flex items-center gap-2">
+              <div className="text-right">
+                <span className="text-[10px] text-zinc-400 block leading-none">
+                  {(selectedGift.isLucky || selectedCategory === 'lucky') ? 'लक्की गिफ्ट' : 'कुल मूल्य'}
+                </span>
+                <span className="text-xs font-bold text-amber-400">{totalCost.toLocaleString()} Coins</span>
               </div>
 
               {isInsufficient ? (
                 <button
                   type="button"
                   onClick={() => setIsRechargeModalOpen(true)}
-                  className="flex items-center gap-1 rounded-xl bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 px-3 py-1.5 text-[11px] font-black text-black shadow-lg hover:brightness-110 active:scale-95 transition-all cursor-pointer animate-pulse shrink-0"
+                  className="rounded-full bg-amber-400 hover:bg-amber-300 text-black px-4 py-1.5 text-xs font-bold shadow transition-all active:scale-95 cursor-pointer shrink-0"
                 >
-                  <Coins className="h-3.5 w-3.5" />
-                  <span>रिचार्ज गरी पठाउनुहोस्</span>
+                  रिचार्ज गर्नुहोस्
                 </button>
               ) : (
                 <button
                   type="button"
                   onClick={handleSend}
-                  className="flex items-center gap-1 rounded-xl bg-gradient-to-r from-rose-500 via-pink-500 to-rose-600 px-3.5 py-1.5 text-[11px] font-black text-white shadow-lg hover:brightness-110 active:scale-95 transition-all cursor-pointer shrink-0"
+                  className={`rounded-full px-4 py-1.5 text-xs font-black shadow-md transition-all active:scale-95 cursor-pointer flex items-center gap-1.5 shrink-0 ${
+                    (selectedGift.isLucky || selectedCategory === 'lucky')
+                      ? 'bg-gradient-to-r from-amber-500 via-rose-500 to-pink-500 hover:brightness-110 text-white ring-1 ring-amber-400/50 shadow-[0_0_15px_rgba(251,191,36,0.3)]'
+                      : 'bg-gradient-to-r from-rose-500 to-pink-500 hover:brightness-110 text-white'
+                  }`}
                 >
                   <Send className="h-3 w-3" />
-                  <span>उपहार पठाउनुहोस् ({totalCost.toLocaleString()})</span>
+                  <span>{(selectedGift.isLucky || selectedCategory === 'lucky') ? 'लक्की पठाउनुहोस् 🎰' : 'पठाउनुहोस्'}</span>
                 </button>
               )}
             </div>
           </div>
         )}
-
       </div>
 
-      {/* Coin Recharge Store Drawer */}
+      {/* Coin Recharge Modal */}
       <CoinRechargeModal
         isOpen={isRechargeModalOpen}
         onClose={() => setIsRechargeModalOpen(false)}
@@ -494,4 +552,3 @@ export const LiveGiftModal: React.FC<LiveGiftModalProps> = ({
     </div>
   );
 };
-

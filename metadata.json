@@ -1,7 +1,6 @@
 {
-  "name": "Tiktop App",
-  "description": "Short-form vertical video social media platform with full-screen feed, creator profiles, engagement metrics, automated banner and interstitial ad engine, video uploader, and comprehensive admin dashboard.",
-  "majorCapabilities": [
-    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
-  ]
+  "name": "TikTok Short Video App",
+  "description": "Short-form vertical video social media platform with full-screen feed, creator monetization & earnings dashboard, payout processing, ad engine, activity notifications, and administration suite.",
+  "requestFramePermissions": ["camera", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

@@ -1,7 +1,6 @@
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
-import { createServer as createViteServer } from 'vite';
 import { db } from './server/db';
 import { adEngine } from './server/adEngine';
 import { recommendationEngine } from './server/recommendation';
@@ -1236,19 +1235,70 @@ export function createServerApp(): express.Express {
     return res.json({ success: true, user: updated });
   });
 
-  // --- LIVE STREAM REWARD CLAIM (1 Hour = 1K pts, 2 Hours = +1K pts, Cap at 2 Hours) ---
+  // User daily face live reward claims tracker (resets on 12:00 AM midnight date change)
+  const userDailyLiveClaims = new Map<string, { dateKey: string; claimedMilestones: number[] }>();
+
+  const getServerDateKey = (): string => {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+
+  // --- LIVE STREAM REWARD CLAIM (1 Hour = 1K pts, 2 Hours = +1K pts, Cap at 2 Hours, Resets at 12 AM) ---
   app.post('/api/rewards/claim-live-stream', (req, res) => {
     const currentUserId = (req.headers['x-user-id'] as string) || req.body.userId || 'user_admin';
     const user = db.getUserById(currentUserId);
     if (!user) return res.status(401).json({ error: 'Authentication required' });
 
-    const { milestone } = req.body;
+    const { milestone, liveDurationSeconds, dateKey } = req.body;
     if (milestone !== 1 && milestone !== 2) {
       return res.status(400).json({ error: 'Milestone must be 1 (1 hour) or 2 (2 hours)' });
     }
 
+    const todayKey = getServerDateKey();
+    const clientDateKey = dateKey || todayKey;
+
+    // Strict 12:00 AM (midnight) boundary validation:
+    // If request has an outdated dateKey (e.g. from before 12:00 AM), it cannot be claimed for the new day
+    if (clientDateKey !== todayKey) {
+      return res.status(400).json({
+        error: '१२:०० AM मा नयाँ दिन सुरू भएकोले अघिल्लो दिनको समय गणना हुँदैन।'
+      });
+    }
+
+    // Live duration verification:
+    // Milestone 1 requires full 3,600s (60 minutes) on the CURRENT day
+    // Milestone 2 requires full 7,200s (120 minutes) on the CURRENT day
+    const duration = Number(liveDurationSeconds) || 0;
+    if (milestone === 1 && duration < 3600) {
+      return res.status(400).json({
+        error: '१ घण्टा (३६०० सेकेन्ड) पूरा नभई रिवार्ड प्राप्त गर्न सकिँदैन।'
+      });
+    }
+    if (milestone === 2 && duration < 7200) {
+      return res.status(400).json({
+        error: '२ घण्टा (७२०० सेकेन्ड) पूरा नभई थप रिवार्ड प्राप्त गर्न सकिँदैन।'
+      });
+    }
+
+    const claimKey = `${user.id}_${todayKey}`;
+    const existing = userDailyLiveClaims.get(claimKey);
+    if (existing && existing.claimedMilestones.includes(milestone)) {
+      return res.status(400).json({
+        error: 'आजको यो माइलस्टोन रिवार्ड पहिले नै दाबी भइसकेको छ।'
+      });
+    }
+
     const pointsAwarded = 1000;
     const result = db.adjustUserPoints(user.id, pointsAwarded);
+
+    if (!existing) {
+      userDailyLiveClaims.set(claimKey, { dateKey: todayKey, claimedMilestones: [milestone] });
+    } else {
+      existing.claimedMilestones.push(milestone);
+    }
 
     return res.json({
       success: true,
@@ -1836,12 +1886,17 @@ export async function startServer() {
   const PORT = 3000;
 
   // --- VITE MIDDLEWARE ---
-  if (process.env.NODE_ENV !== 'production') {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: 'spa',
-    });
-    serverApp.use(vite.middlewares);
+  if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
+    try {
+      const { createServer: createViteServer } = await import('vite');
+      const vite = await createViteServer({
+        server: { middlewareMode: true },
+        appType: 'spa',
+      });
+      serverApp.use(vite.middlewares);
+    } catch (viteErr) {
+      console.warn('Vite middleware could not be initialized:', viteErr);
+    }
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     serverApp.use(express.static(distPath));
